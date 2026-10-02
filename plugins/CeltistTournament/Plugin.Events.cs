@@ -20,6 +20,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerHurt>(OnPlayerHurt);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        RegisterEventHandler<EventItemPickup>(OnItemPickup);
     }
 
     // ───────────── join authorisation: only assigned players get in ─────────────
@@ -77,6 +78,24 @@ public sealed partial class CeltistTournamentPlugin
         // If a connected player ended up on the wrong side (manual team change), put them back.
         var player = e.Userid;
         if (player is { IsBot: false, IsValid: true } && _plan?.SlotOf(player.SteamID) is { } slot) PlaceOnSide(player, slot);
+        if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
+        {
+            var id = player.SteamID;
+            if (!_loadouts.ContainsKey(id)) _ = ApplySkinsAsync(id);
+            AddTimer(0.3f, () => ApplyToHeldWeapons(id)); // weapons exist a moment after the spawn event
+        }
+        return HookResult.Continue;
+    }
+
+    /// <summary>Picked-up and bought weapons get the loadout skin too.</summary>
+    private HookResult OnItemPickup(EventItemPickup e, GameEventInfo info)
+    {
+        var player = e.Userid;
+        if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
+        {
+            var id = player.SteamID;
+            AddTimer(0.15f, () => ApplyToHeldWeapons(id));
+        }
         return HookResult.Continue;
     }
 

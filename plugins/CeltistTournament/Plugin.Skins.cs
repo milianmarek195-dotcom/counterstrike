@@ -54,6 +54,7 @@ public sealed partial class CeltistTournamentPlugin
                 weapon.AttributeManager.Item.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
                 weapon.AttributeManager.Item.ItemIDLow = 16384 & 0xFFFFFFFF;
                 weapon.AttributeManager.Item.ItemIDHigh = 0;
+                weapon.AttributeManager.Item.AccountID = (uint)steamId; // the item belongs to the player, otherwise the client ignores the fallback paint
                 weapon.FallbackPaintKit = item.PaintIndex;
                 weapon.FallbackSeed = item.Pattern;
                 weapon.FallbackWear = item.Float;
