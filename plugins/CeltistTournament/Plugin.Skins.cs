@@ -135,8 +135,14 @@ public sealed partial class CeltistTournamentPlugin
         econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
         StampItemId(econ);
         econ.AccountID = (uint)steamId;
+        // the client also reads the networked fallback fields of the weapon, so they are set next to the attributes
+        weapon.FallbackPaintKit = item.PaintIndex;
+        weapon.FallbackSeed = item.Pattern;
+        weapon.FallbackWear = item.Float;
+        weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
         SetPaintAttributes(econ, item);
         Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+        Logger.LogInformation("[Celtist] knife for {Steam}: def {Def}, paint {Paint}, pattern {Seed}, float {Float}", steamId, item.WeaponDefIndex, item.PaintIndex, item.Pattern, item.Float);
     }
 
     // ───────────── gloves ─────────────
@@ -150,6 +156,7 @@ public sealed partial class CeltistTournamentPlugin
         var pawn = player.PlayerPawn.Value;
         if (pawn is null || !pawn.IsValid) return;
 
+        Logger.LogInformation("[Celtist] gloves for {Steam}: def {Def}, paint {Paint}", steamId, item.WeaponDefIndex, item.PaintIndex);
         var gloves = pawn.EconGloves;
         gloves.NetworkedDynamicAttributes.Attributes.RemoveAll();
         gloves.AttributeList.Attributes.RemoveAll();
@@ -165,6 +172,7 @@ public sealed partial class CeltistTournamentPlugin
                 gloves.AccountID = (uint)steamId;
                 SetPaintAttributes(gloves, item);
                 gloves.Initialized = true;
+                Logger.LogInformation("[Celtist] gloves set: def {Def}, paint {Paint}, seed {Seed}, wear {Wear}", item.WeaponDefIndex, item.PaintIndex, item.Pattern, item.Float);
 
                 // the glove model is part of the player model: toggling the body group makes the client rebuild it
                 pawn.AcceptInput("SetBodygroup", value: "first_or_third_person,0");
@@ -188,7 +196,7 @@ public sealed partial class CeltistTournamentPlugin
     /// <summary>Paint kit, pattern and wear (and the StatTrak counter) as econ attributes, on both attribute lists the client reads.</summary>
     private void SetPaintAttributes(CEconItemView item, SkinItem skin)
     {
-        if (!EnsureAttributeSetter()) return;
+        if (!EnsureAttributeSetter()) { Logger.LogWarning("[Celtist] paint attributes skipped: attribute function unavailable"); return; }
         foreach (var handle in new[] { item.NetworkedDynamicAttributes.Handle, item.AttributeList.Handle })
         {
             _setAttribute!.Invoke(handle, "set item texture prefab", skin.PaintIndex);

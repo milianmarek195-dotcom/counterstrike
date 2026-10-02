@@ -23,6 +23,7 @@ function wearEnum(f: number) {
 }
 const NAME_TAG_MAX = 20;
 
+const skinName = (name: string | null | undefined) => (name && name.trim() ? name : 'Vanilla');
 const img = (url: string | null | undefined, size = '256fx192f') => (url ? `${url}/${size}` : '');
 function wearName(f: number) {
   return f < 0.07 ? 'Factory New' : f < 0.15 ? 'Minimal Wear' : f < 0.38 ? 'Field-Tested' : f < 0.45 ? 'Well-Worn' : 'Battle-Scarred';
@@ -95,7 +96,7 @@ export default function SkinChanger() {
                           {s.imageUrl && <img src={img(s.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-full max-w-full object-contain" />}
                           {maybeLocked && <span title="Das genaue Level hängt von Abnutzung und StatTrak ab (siehe Editor)" className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white"><Lock size={11} />bis Lvl {s.requiredLevel}</span>}
                         </div>
-                        <div className="p-2"><div className="truncate text-sm font-semibold">{s.name}</div><div className="truncate text-xs text-muted">{s.rarity ?? ''}{s.priceMaxUsd === null ? ' · Preis unbekannt' : ` · bis $${Math.round(s.priceMaxUsd)}`}</div></div>
+                        <div className="p-2"><div className="truncate text-sm font-semibold">{skinName(s.name)}</div><div className="truncate text-xs text-muted">{s.rarity ?? ''}{s.priceMaxUsd === null ? ' · Preis unbekannt' : ` · bis $${Math.round(s.priceMaxUsd)}`}</div></div>
                       </button>
                     );
                   })}
@@ -118,7 +119,7 @@ export default function SkinChanger() {
             {current.items.map(({ item }) => (
               <Card key={item.id} className="p-2">
                 <div className="flex h-20 items-center justify-center">{item.skin?.imageUrl && <img src={img(item.skin.imageUrl)} alt="" referrerPolicy="no-referrer" className="max-h-full object-contain" />}</div>
-                <div className="truncate text-sm font-semibold">{item.skin ? `${item.skin.weaponName} | ${item.skin.name}` : `Waffe ${item.weaponDefIndex}`}</div>
+                <div className="truncate text-sm font-semibold">{item.skin ? `${item.skin.weaponName} | ${skinName(item.skin.name)}` : `Waffe ${item.weaponDefIndex}`}</div>
                 <div className="text-xs text-muted">{item.float.toFixed(3)} · Pattern {item.pattern}{item.statTrak ? ' · ST' : ''}</div>
                 <Button variant="ghost" className="mt-1 w-full" onClick={() => void act.run(() => api(`/loadouts/${current.id}/items`, { method: 'PUT', body: { items: current.items.filter((x) => x.item.id !== item.id).map((x) => ({ inventoryItemId: x.item.id })) } }))}><Trash2 size={14} />Entfernen</Button>
               </Card>
@@ -134,7 +135,7 @@ export default function SkinChanger() {
             {inv.data.items.map((i) => (
               <li key={i.id} className="flex items-center gap-3 rounded-lg border bg-card p-2 text-sm">
                 {i.skin?.imageUrl && <img src={img(i.skin.imageUrl, '96fx72f')} alt="" referrerPolicy="no-referrer" className="h-12 w-16 object-contain" />}
-                <div className="min-w-0 flex-1"><div className="truncate font-medium">{i.skin ? `${i.skin.weaponName} | ${i.skin.name}` : `Waffe ${i.weaponDefIndex}`}</div><div className="text-xs text-muted">{wearName(i.float)} · {i.float.toFixed(3)} · Pattern {i.pattern}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate font-medium">{i.skin ? `${i.skin.weaponName} | ${skinName(i.skin.name)}` : `Waffe ${i.weaponDefIndex}`}</div><div className="text-xs text-muted">{wearName(i.float)} · {i.float.toFixed(3)} · Pattern {i.pattern}</div></div>
                 <Button variant="ghost" aria-label="Item löschen" onClick={() => void act.run(() => api(`/inventory/${i.id}`, { method: 'DELETE' }))}><Trash2 size={15} /></Button>
               </li>
             ))}
@@ -219,9 +220,9 @@ function Editor({ skin, access, level, loadouts, target, setTarget, onSaved }: {
   return (
     <Card className="space-y-4">
       <div className="flex h-36 items-center justify-center rounded-lg bg-elevated p-2" style={{ borderBottom: `3px solid ${RARITY[skin.rarity ?? ''] ?? '#888'}` }}>
-        {skin.imageUrl && <img src={img(skin.imageUrl, '360fx270f')} alt={`${skin.weaponName} | ${skin.name}`} referrerPolicy="no-referrer" className="max-h-full object-contain" />}
+        {skin.imageUrl && <img src={img(skin.imageUrl, '360fx270f')} alt={`${skin.weaponName} | ${skinName(skin.name)}`} referrerPolicy="no-referrer" className="max-h-full object-contain" />}
       </div>
-      <div><h2 className="font-bold">{skin.weaponName} | {skin.name}</h2><p className="text-xs text-muted">{skin.rarity} · {entry ? `${wearName(usedFloat)}${variant === 'STATTRAK' ? ' StatTrak' : ''}: ca. ${Math.round(entry.priceUsd)} → Level ${needed}` : detail.data ? `kein Marktpreis für diese Variante → Level ${needed}` : 'Preis wird geladen …'}</p></div>
+      <div><h2 className="font-bold">{skin.weaponName} | {skinName(skin.name)}</h2><p className="text-xs text-muted">{skin.rarity} · {entry ? `${wearName(usedFloat)}${variant === 'STATTRAK' ? ' StatTrak' : ''}: ca. ${Math.round(entry.priceUsd)} → Level ${needed}` : detail.data ? `kein Marktpreis für diese Variante → Level ${needed}` : 'Preis wird geladen …'}</p></div>
 
       <div>
         <div className="mb-1 flex justify-between text-sm"><span className="text-muted">Float</span><span className="font-mono">{float.toFixed(4)} · {wearName(float)}</span></div>
