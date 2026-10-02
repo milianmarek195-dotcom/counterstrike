@@ -1,6 +1,6 @@
 # CS2-Plugin (CeltistTournament)
 
-C# / .NET 8, Metamod + CounterStrikeSharp (API 1.0.376). Quellen: `plugins/CeltistTournament`.
+C# / .NET 10, Metamod + CounterStrikeSharp (API 1.0.376). Quellen: `plugins/CeltistTournament`.
 
 > **Status:** nicht kompiliert und nie auf einem echten Server getestet (siehe `CURRENT_STATUS.md`). Das Wire-Protokoll ist durch den Mock-Server und Integrationstests abgesichert.
 
@@ -11,7 +11,7 @@ cd plugins\CeltistTournament
 dotnet publish -c Release
 ```
 
-Benötigt das .NET-8-SDK. Das Ergebnis (`CeltistTournament.dll`) kommt nach `game/csgo/addons/counterstrikesharp/plugins/CeltistTournament/`.
+Benötigt das .NET-10-SDK. Das Ergebnis (`CeltistTournament.dll`) kommt nach `game/csgo/addons/counterstrikesharp/plugins/CeltistTournament/`.
 
 ## Konfiguration
 
