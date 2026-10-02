@@ -4,6 +4,8 @@ using Celtist.Tournament.Api;
 using Celtist.Tournament.Match;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
+using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Modules.Timers;
 
@@ -65,6 +67,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
 
     public override void Unload(bool hotReload)
     {
+        VirtualFunctions.GiveNamedItemFunc.Unhook(OnGiveNamedItemPost, HookMode.Post);
         _cts?.Cancel();
         _api?.Dispose();
     }

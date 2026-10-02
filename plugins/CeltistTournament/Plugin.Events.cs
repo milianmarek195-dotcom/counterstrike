@@ -1,6 +1,8 @@
 using Celtist.Tournament.Match;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
+using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Celtist.Tournament;
@@ -21,7 +23,8 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
-        RegisterListener<Listeners.OnEntityCreated>(OnWeaponCreated);
+        RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
+        VirtualFunctions.GiveNamedItemFunc.Hook(OnGiveNamedItemPost, HookMode.Post);
     }
 
     // ───────────── join authorisation: only assigned players get in ─────────────

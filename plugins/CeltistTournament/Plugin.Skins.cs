@@ -60,30 +60,58 @@ public sealed partial class CeltistTournamentPlugin
     }
 
     /// <summary>
-    /// Bought and picked-up weapons are new entities: the client only takes the skin if it is set when the weapon is
-    /// created, so this runs for every weapon entity and applies the owner's loadout one frame later (when the owner is set).
+    /// Bought weapons: the game creates them in GiveNamedItem. Hooking its result lets the skin be set on the weapon
+    /// at the moment it exists, before it is shown to the client. This is the path that makes bought weapons skinned.
     /// </summary>
-    private void OnWeaponCreated(CEntityInstance entity)
+    private HookResult OnGiveNamedItemPost(DynamicHook hook)
+    {
+        try
+        {
+            if (!Config.SkinsEnabled) return HookResult.Continue;
+            var services = hook.GetParam<CCSPlayer_ItemServices>(0);
+            var weapon = hook.GetReturn<CBasePlayerWeapon>();
+            if (services is null || weapon is null || !weapon.IsValid || weapon.DesignerName?.StartsWith("weapon_", StringComparison.Ordinal) != true) return HookResult.Continue;
+
+            var controllerEntity = services.Pawn.Value?.Controller.Value;
+            if (controllerEntity is null) return HookResult.Continue;
+            var player = new CCSPlayerController(controllerEntity.Handle);
+            if (IsHuman(player) && _loadouts.TryGetValue(player.SteamID, out var items)) ApplyToWeapon(weapon, player.SteamID, items);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] skin on given weapon failed: {Message}", e.Message); }
+        return HookResult.Continue;
+    }
+
+    /// <summary>
+    /// Every other way a weapon enters the world (map spawns, dropped weapons, round start gear): once it has spawned,
+    /// find its owner (the original owner's SteamID is stored on the weapon) and apply that player's loadout.
+    /// </summary>
+    private void OnWeaponSpawned(CEntityInstance entity)
     {
         if (!Config.SkinsEnabled || !entity.DesignerName.StartsWith("weapon_", StringComparison.Ordinal)) return;
         var weapon = new CBasePlayerWeapon(entity.Handle);
-        Server.NextFrame(() =>
+        Server.NextWorldUpdate(() =>
         {
             try
             {
                 if (!weapon.IsValid) return;
-                var owner = weapon.OwnerEntity.Value;
-                if (owner is null) return;
-                var pawn = new CCSPlayerPawn(owner.Handle);
-                var controllerEntity = pawn.Controller.Value;
-                if (controllerEntity is null) return;
-                var player = new CCSPlayerController(controllerEntity.Handle);
+                CCSPlayerController? player = null;
+                if (weapon.OriginalOwnerXuidLow > 0)
+                    player = Utilities.GetPlayerFromSteamId(SteamId64Base + weapon.OriginalOwnerXuidLow);
+                if (player is null)
+                {
+                    var ownerPawn = weapon.OwnerEntity.Value;
+                    var controllerEntity = ownerPawn is null ? null : new CCSPlayerPawn(ownerPawn.Handle).Controller.Value;
+                    if (controllerEntity is not null) player = new CCSPlayerController(controllerEntity.Handle);
+                }
                 if (!IsHuman(player)) return;
-                if (_loadouts.TryGetValue(player.SteamID, out var items)) ApplyToWeapon(weapon, player.SteamID, items);
+                if (_loadouts.TryGetValue(player!.SteamID, out var items)) ApplyToWeapon(weapon, player.SteamID, items);
             }
-            catch (Exception e) { Logger.LogWarning("[Celtist] skin on new weapon failed: {Message}", e.Message); }
+            catch (Exception e) { Logger.LogWarning("[Celtist] skin on spawned weapon failed: {Message}", e.Message); }
         });
     }
+
+    /// <summary>A SteamID64 is this base plus the 32-bit account id the game stores on weapons.</summary>
+    private const ulong SteamId64Base = 76561197960265728UL;
 
     private static bool IsKnife(string? designerName) => designerName is not null && (designerName.Contains("knife", StringComparison.Ordinal) || designerName.Contains("bayonet", StringComparison.Ordinal));
 
