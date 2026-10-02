@@ -11,3 +11,6 @@
 | Skins erscheinen nicht | Server-Flag `skinsEnabled`, `SkinsEnabled` in der Plugin-Config, Skin-Level des Spielers. |
 | Windows: `&&` im PowerShell-Fehler | PowerShell 5.1 kennt `&&` nicht; Befehle einzeln oder mit `;` ausführen. |
 | npm blockiert Install-Scripts | `npm approve-scripts <paket> --no-allow-scripts-pin`. |
+| Steam-Login: `NONCE_INVALID` | Uhr des Servers weicht um mehr als 5 Minuten von Steam ab. `date -u` mit dem `Date`-Header von steamcommunity.com vergleichen, NTP/`timedatectl` reparieren. |
+| Cloudflare „DNS points to prohibited IP“ | Im Tunnel zeigt die Route auf eine Adresse statt auf `http://localhost:<port>`, oder es gibt noch einen alten A-Eintrag für den Namen. |
+| Plugin baut nicht: „CounterStrikeSharp.API 1.0.376 nicht kompatibel mit net8.0“ | Das Projekt muss `net10.0` zielen (steht so im Repo). SDK 10 nötig. |

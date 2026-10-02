@@ -28,6 +28,6 @@ Tests: `npm test`. Der API-Test startet sein eigenes PostgreSQL.
 
 ## Dokumentation
 
-[Aktueller Stand](docs/CURRENT_STATUS.md) · [Architektur](docs/ARCHITECTURE.md) · [Turniere & Matches](docs/TOURNAMENTS.md) · [Skins](docs/SKIN_SYSTEM.md) · [Plugin](docs/PLUGIN.md) · [Deployment](docs/DEPLOYMENT.md) · [Ubuntu](docs/UBUNTU_SETUP.md) · [Sicherheit](docs/SECURITY.md) · [Fehlersuche](docs/TROUBLESHOOTING.md) · [API](docs/API.md)
+[Aktueller Stand](docs/CURRENT_STATUS.md) · [Architektur](docs/ARCHITECTURE.md) · [Turniere & Matches](docs/TOURNAMENTS.md) · [Skins](docs/SKIN_SYSTEM.md) · [Plugin](docs/PLUGIN.md) · [Deployment (Docker)](docs/DEPLOYMENT.md) · [Deployment (pm2 + Tunnel)](docs/DEPLOYMENT_PM2_TUNNEL.md) · [Ubuntu](docs/UBUNTU_SETUP.md) · [Sicherheit](docs/SECURITY.md) · [Fehlersuche](docs/TROUBLESHOOTING.md) · [API](docs/API.md)
 
 Wingman Cups sind **Coming Soon** (nur Seite, keine Logik).
