@@ -56,6 +56,12 @@ export class SkinsService {
     };
   }
 
+  /** All weapons that have at least one skin, with the number of skins: drives the weapon grid of the skin changer. */
+  async weapons() {
+    const rows = await this.prisma.skin.groupBy({ by: ['weaponDefIndex', 'weaponName', 'slot'], where: { active: true }, _count: { _all: true }, orderBy: [{ slot: 'asc' }, { weaponName: 'asc' }] });
+    return { weapons: rows.map((r) => ({ weaponDefIndex: r.weaponDefIndex, weaponName: r.weaponName, slot: r.slot, skins: r._count._all })) };
+  }
+
   async detail(id: string) {
     const skin = await this.prisma.skin.findUnique({ where: { id }, include: { prices: true } });
     if (!skin) throw notFound('SKIN_NOT_FOUND', 'Skin does not exist');

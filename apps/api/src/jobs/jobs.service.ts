@@ -71,8 +71,11 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
         return this.cleanupServerEvents();
       case 'skin-price-sync':
         return this.skinSync.syncPrices();
-      case 'skin-catalog-sync':
-        return this.skinSync.syncCatalog();
+      case 'skin-catalog-sync': {
+        // Prices must run AFTER the catalog is stored, otherwise they only match the skins that already exist.
+        const catalog = await this.skinSync.syncCatalog();
+        return { ...catalog, prices: await this.skinSync.syncPrices() };
+      }
       default:
         throw new Error(`Unknown job ${name}`);
     }

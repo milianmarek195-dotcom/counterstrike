@@ -44,6 +44,12 @@ export class SkinsController {
     return this.skins.search(query);
   }
 
+  @Get('skins/weapons')
+  @Public()
+  weapons() {
+    return this.skins.weapons();
+  }
+
   @Get('skins/:id')
   @Public()
   detail(@Param('id', { schema: idParam }) id: string) {

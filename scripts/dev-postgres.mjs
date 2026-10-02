@@ -20,6 +20,8 @@ const pg = new EmbeddedPostgres({
   password,
   port,
   persistent: true,
+  // The server encoding must be UTF8: skin names contain CJK characters, and the Windows default (WIN1252) rejects them.
+  initdbFlags: ["--encoding=UTF8", "--locale=C"],
   onLog: () => {},
   onError: (e) => console.error('[postgres]', e),
 });
