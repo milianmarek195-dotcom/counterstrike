@@ -9,6 +9,8 @@ export interface CatalogSkin {
   slot: LoadoutSlot;
   paintIndex: number;
   name: string;
+  /** Finish variant that shares the name with others (e.g. Doppler Phase 2, Ruby). */
+  phase?: string | null;
   rarity: string | null;
   collection: string | null;
   minFloat: number;

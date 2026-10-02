@@ -15,6 +15,7 @@ interface RawSkin {
   stattrak?: boolean;
   souvenir?: boolean;
   paint_index?: string | number | null;
+  phase?: string | null;
   rarity?: { name?: string };
   collections?: Array<{ name?: string }>;
   image?: string;
@@ -74,6 +75,7 @@ export class CsgoApiCatalogSource extends SkinCatalogSource {
         slot,
         paintIndex,
         name: entry.pattern?.name ?? '',
+        phase: entry.phase?.trim() ? entry.phase.trim().slice(0, 32) : null,
         rarity: entry.rarity?.name ?? null,
         collection: entry.collections?.[0]?.name ?? null,
         minFloat: Math.max(0, min),

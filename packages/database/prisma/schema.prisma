@@ -1135,6 +1135,7 @@ model Skin {
   slot              LoadoutSlot
   paintIndex        Int // paint kit id; 0 = vanilla
   name              String      @db.VarChar(96)
+  phase             String?     @db.VarChar(32) // Doppler variants: Phase 1-4, Ruby, Sapphire, Black Pearl, Emerald
   rarity            String?     @db.VarChar(48)
   collection        String?     @db.VarChar(96)
   minFloat          Float       @default(0)

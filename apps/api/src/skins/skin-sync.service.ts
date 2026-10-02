@@ -41,6 +41,7 @@ export class SkinSyncService {
             weaponName: s.weaponName,
             slot: s.slot,
             name: s.name,
+            phase: s.phase ?? null,
             rarity: s.rarity,
             collection: s.collection,
             minFloat: s.minFloat,

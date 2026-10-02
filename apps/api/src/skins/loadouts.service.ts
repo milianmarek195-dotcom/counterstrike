@@ -24,7 +24,7 @@ const loadoutInclude = {
     include: {
       inventoryItem: {
         include: {
-          skin: { select: { id: true, name: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true } },
+          skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true } },
           stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
         },
       },
