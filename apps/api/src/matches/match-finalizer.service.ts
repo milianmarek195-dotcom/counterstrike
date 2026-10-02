@@ -133,6 +133,9 @@ export class MatchFinalizerService {
             clutches: p.clutches,
             entryKills: p.entryKills,
             entryDeaths: p.entryDeaths,
+            killsAwp: p.killsAwp,
+            killsAk47: p.killsAk47,
+            killsPistol: p.killsPistol,
           })),
         });
 
@@ -219,7 +222,7 @@ export class MatchFinalizerService {
     const sums = await tx.matchPlayerMapStats.groupBy({
       by: ['matchPlayerId'],
       where: { matchPlayer: { matchId } },
-      _sum: { rounds: true, kills: true, deaths: true, assists: true, headshots: true, damage: true, mvps: true, flashAssists: true, utilityDamage: true, clutches: true, entryKills: true, entryDeaths: true },
+      _sum: { rounds: true, kills: true, deaths: true, assists: true, headshots: true, damage: true, mvps: true, flashAssists: true, utilityDamage: true, clutches: true, entryKills: true, entryDeaths: true, killsAwp: true, killsAk47: true, killsPistol: true },
     });
     // Players without a team (lobby only) take no part in the result.
     const players = (await tx.matchPlayer.findMany({ where: { matchId, matchTeamId: { not: null } }, include: { matchTeam: { select: { slot: true } } } })).map((p) => ({ ...p, matchTeam: p.matchTeam! }));
@@ -239,6 +242,9 @@ export class MatchFinalizerService {
           clutches: s._sum.clutches ?? 0,
           entryKills: s._sum.entryKills ?? 0,
           entryDeaths: s._sum.entryDeaths ?? 0,
+          killsAwp: s._sum.killsAwp ?? 0,
+          killsAk47: s._sum.killsAk47 ?? 0,
+          killsPistol: s._sum.killsPistol ?? 0,
         } satisfies CombatStats,
       ] as const),
     );

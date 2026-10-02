@@ -11,6 +11,10 @@ export interface CombatStats {
   clutches: number;
   entryKills: number;
   entryDeaths: number;
+  /** Kills split by weapon class. Bots never count; the sum is at most `kills` (other weapons make up the rest). */
+  killsAwp: number;
+  killsAk47: number;
+  killsPistol: number;
 }
 
 export const EMPTY_COMBAT_STATS: Readonly<CombatStats> = {
@@ -26,6 +30,9 @@ export const EMPTY_COMBAT_STATS: Readonly<CombatStats> = {
   clutches: 0,
   entryKills: 0,
   entryDeaths: 0,
+  killsAwp: 0,
+  killsAk47: 0,
+  killsPistol: 0,
 };
 
 export function addCombatStats(a: CombatStats, b: CombatStats): CombatStats {
@@ -42,6 +49,9 @@ export function addCombatStats(a: CombatStats, b: CombatStats): CombatStats {
     clutches: a.clutches + b.clutches,
     entryKills: a.entryKills + b.entryKills,
     entryDeaths: a.entryDeaths + b.entryDeaths,
+    killsAwp: a.killsAwp + b.killsAwp,
+    killsAk47: a.killsAk47 + b.killsAk47,
+    killsPistol: a.killsPistol + b.killsPistol,
   };
 }
 

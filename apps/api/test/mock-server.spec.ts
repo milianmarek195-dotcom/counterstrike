@@ -75,5 +75,11 @@ describe('mock CS2 server against the real gateway', () => {
     expect((await t.prisma.playerRank.findFirstOrThrow({ where: { userId: leader.id, mode: 'FIVE_V_FIVE' } })).elo).toBe(1000);
     const stats = await t.prisma.matchPlayer.findFirstOrThrow({ where: { matchId, userId: leader.id } });
     expect(stats.kills).toBeGreaterThan(0);
+    // weapon-class kills arrive from the plugin and are stored per player (AWP / AK-47 / pistol)
+    expect(stats).toMatchObject({ killsAwp: 2, killsAk47: 3, killsPistol: 1 });
+    const profile = (await as(t, null).get(`/v1/players/${leader.steamId}`).expect(200)).body;
+    expect(profile.modes.FIVE_V_FIVE.overall).toMatchObject({ killsAwp: 2, killsAk47: 3, killsPistol: 1 });
+    const board = (await as(t, null).get(`/v1/matches/${matchId}/scoreboard`).expect(200)).body;
+    expect(board.total.find((r: { steamId: string }) => r.steamId === leader.steamId)).toMatchObject({ killsAwp: 2, killsAk47: 3, killsPistol: 1 });
   }, 60_000);
 });

@@ -21,6 +21,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
+        RegisterListener<Listeners.OnEntityCreated>(OnWeaponCreated);
     }
 
     // ───────────── join authorisation: only assigned players get in ─────────────
@@ -146,14 +147,15 @@ public sealed partial class CeltistTournamentPlugin
         {
             var slot = plan.SlotOf(p.SteamID);
             if (slot is null) continue;
-            var s = p.ActionTrackingServices?.MatchStats;
+            var c = StatsOf(p.SteamID); // own counters: bots never count
             players.Add(new
             {
                 steamId = p.SteamID.ToString(), team = slot, rounds = map.RoundsPlayed,
-                kills = s?.Kills ?? 0, deaths = s?.Deaths ?? 0, assists = s?.Assists ?? 0,
-                headshots = s?.HeadShotKills ?? 0, damage = s?.Damage ?? 0, mvps = p.MVPs,
-                flashAssists = 0, utilityDamage = s?.UtilityDamage ?? 0, clutches = 0,
-                entryKills = s?.EntryCount ?? 0, entryDeaths = 0,
+                kills = c.Kills, deaths = c.Deaths, assists = c.Assists,
+                headshots = c.Headshots, damage = c.Damage, mvps = Math.Min(p.MVPs, map.RoundsPlayed),
+                flashAssists = 0, utilityDamage = 0, clutches = 0,
+                entryKills = 0, entryDeaths = 0,
+                killsAwp = c.KillsAwp, killsAk47 = c.KillsAk47, killsPistol = c.KillsPistol,
             });
         }
         if (players.Count == 0) { Logger.LogError("[Celtist] map ended but no match players are connected - result not sent"); map.ResultSent = false; return HookResult.Continue; }
@@ -202,6 +204,7 @@ public sealed partial class CeltistTournamentPlugin
 
     private HookResult OnPlayerHurt(EventPlayerHurt e, GameEventInfo info)
     {
+        CountDamage(e);
         var attacker = e.Attacker; var victim = e.Userid;
         if (_plan is null || !_penaltiesEnabled || attacker is null || victim is null || attacker.Slot == victim.Slot || attacker.Team != victim.Team || attacker.IsBot) return HookResult.Continue;
         var total = _teamDamage.GetValueOrDefault(attacker.SteamID) + e.DmgHealth;
@@ -212,6 +215,7 @@ public sealed partial class CeltistTournamentPlugin
 
     private HookResult OnPlayerDeath(EventPlayerDeath e, GameEventInfo info)
     {
+        CountDeath(e);
         var attacker = e.Attacker; var victim = e.Userid;
         if (_plan is null || !_penaltiesEnabled || attacker is null || victim is null || attacker.Slot == victim.Slot || attacker.Team != victim.Team || attacker.IsBot) return HookResult.Continue;
         var kills = _teamKills.GetValueOrDefault(attacker.SteamID) + 1;

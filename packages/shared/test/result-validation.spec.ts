@@ -150,6 +150,7 @@ describe('validateMapResult', () => {
 
   it.each([
     ['headshots above kills', { headshots: 20, kills: 10 }, 'HEADSHOTS'],
+    ['weapon kills above kills', { killsAwp: 8, killsAk47: 6, killsPistol: 4, kills: 15 }, 'WEAPON_KILLS'],
     ['more rounds than the map', { rounds: 40 }, 'PLAYER_ROUNDS'],
     ['more MVPs than rounds', { mvps: 30 }, 'MVPS'],
     ['absurd damage', { damage: 90_000 }, 'DAMAGE'],
@@ -256,5 +257,23 @@ describe('gateway schemas', () => {
     expect(skinCommandSchema.safeParse({ actorSteamId: teamA[0], target: teamB[0], level: 2, durationMinutes: 120 }).success).toBe(true);
     expect(skinCommandSchema.safeParse({ actorSteamId: teamA[0], target: 'everyone', level: 3 }).success).toBe(false);
     expect(skinCommandSchema.safeParse({ actorSteamId: teamA[0], target: 'all', level: 4 }).success).toBe(false);
+  });
+});
+
+describe('weapon-class kills', () => {
+  const base = { matchId: MATCH_ID, mapNumber: 1, idempotencyKey: 'weapon-kills-test', scoreA: 13, scoreB: 5, rounds: 18, startedAt: '2026-10-02T13:00:00Z', endedAt: '2026-10-02T13:50:00Z' };
+
+  it('defaults to zero so older plugin versions keep working', () => {
+    const parsed = mapResultSchema.parse({ ...base, players: [player(teamA[0]!, 'A', { rounds: 18 })] });
+    expect(parsed.players[0]).toMatchObject({ killsAwp: 0, killsAk47: 0, killsPistol: 0 });
+  });
+
+  it('accepts a split that adds up to at most the kills, the rest being other weapons', () => {
+    const parsed = mapResultSchema.parse({ ...base, players: [player(teamA[0]!, 'A', { rounds: 18, kills: 15, killsAwp: 5, killsAk47: 6, killsPistol: 2 })] });
+    expect(parsed.players[0]).toMatchObject({ killsAwp: 5, killsAk47: 6, killsPistol: 2 });
+  });
+
+  it('rejects negative counters', () => {
+    expect(mapResultSchema.safeParse({ ...base, players: [player(teamA[0]!, 'A', { rounds: 18, killsAwp: -1 })] }).success).toBe(false);
   });
 });

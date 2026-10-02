@@ -72,6 +72,7 @@ export function validateMapResult(ctx: ResultValidationContext, result: MapResul
     if (player.mvps > player.rounds) errors.push(`MVPS: ${label} has more MVPs than rounds`);
     if (player.damage > player.rounds * MAX_DAMAGE_PER_ROUND) errors.push(`DAMAGE: ${label} dealt implausible damage`);
     if (player.utilityDamage > player.damage) errors.push(`UTILITY_DAMAGE: ${label} has more utility than total damage`);
+    if (player.killsAwp + player.killsAk47 + player.killsPistol > player.kills) errors.push(`WEAPON_KILLS: ${label} has more weapon kills than kills`);
     if (player.entryKills > player.kills) errors.push(`ENTRY_KILLS: ${label} has more entry kills than kills`);
     if (player.entryDeaths > player.deaths) errors.push(`ENTRY_DEATHS: ${label} has more entry deaths than deaths`);
     if (player.clutches > player.rounds) errors.push(`CLUTCHES: ${label} has more clutches than rounds`);

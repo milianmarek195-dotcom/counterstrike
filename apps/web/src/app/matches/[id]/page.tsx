@@ -17,7 +17,7 @@ interface MatchView {
   viewer: { canControl: boolean; role: string | null; slot: 'A' | 'B' | null } | null;
 }
 interface Veto { complete: boolean; current: { team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string }>; actions: Array<{ team: string; action: string; map: { name: string } | null; side: string | null }> }
-interface Row { steamId: string; displayName: string; team: string; kills: number; deaths: number; assists: number; kd: number; adr: number; hsPercent: number; mvps: number }
+interface Row { steamId: string; displayName: string; team: string; kills: number; deaths: number; assists: number; kd: number; adr: number; hsPercent: number; mvps: number; killsAwp: number; killsAk47: number; killsPistol: number }
 
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -57,9 +57,9 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       {board.data && board.data.total.length > 0 && (
         <section className="mt-8">
           <h2 className="mb-3 text-lg font-bold">Scoreboard</h2>
-          <Table head={['Spieler', 'Team', 'K', 'D', 'A', 'K/D', 'ADR', 'HS %', 'MVP']}>
+          <Table head={['Spieler', 'Team', 'K', 'D', 'A', 'AWP', 'AK-47', 'Pistole', 'K/D', 'ADR', 'HS %', 'MVP']}>
             {board.data.total.map((r) => (
-              <tr key={r.steamId}><td className="px-3 py-2"><Link className="hover:text-primary" href={`/players/${r.steamId}`}>{r.displayName}</Link></td><td className="px-3 py-2">{r.team}</td><td className="px-3 py-2">{r.kills}</td><td className="px-3 py-2">{r.deaths}</td><td className="px-3 py-2">{r.assists}</td><td className="px-3 py-2">{fmtNum(r.kd, 2)}</td><td className="px-3 py-2">{fmtNum(r.adr, 1)}</td><td className="px-3 py-2">{fmtNum(r.hsPercent, 1)}</td><td className="px-3 py-2">{r.mvps}</td></tr>
+              <tr key={r.steamId}><td className="px-3 py-2"><Link className="hover:text-primary" href={`/players/${r.steamId}`}>{r.displayName}</Link></td><td className="px-3 py-2">{r.team}</td><td className="px-3 py-2">{r.kills}</td><td className="px-3 py-2">{r.deaths}</td><td className="px-3 py-2">{r.assists}</td><td className="px-3 py-2">{r.killsAwp}</td><td className="px-3 py-2">{r.killsAk47}</td><td className="px-3 py-2">{r.killsPistol}</td><td className="px-3 py-2">{fmtNum(r.kd, 2)}</td><td className="px-3 py-2">{fmtNum(r.adr, 1)}</td><td className="px-3 py-2">{fmtNum(r.hsPercent, 1)}</td><td className="px-3 py-2">{r.mvps}</td></tr>
             ))}
           </Table>
         </section>

@@ -116,6 +116,9 @@ export class RankingService {
           clutches: { increment: stats.clutches },
           entryKills: { increment: stats.entryKills },
           entryDeaths: { increment: stats.entryDeaths },
+          killsAwp: { increment: stats.killsAwp },
+          killsAk47: { increment: stats.killsAk47 },
+          killsPistol: { increment: stats.killsPistol },
         },
       });
     }

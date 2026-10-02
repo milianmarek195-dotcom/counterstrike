@@ -21,12 +21,16 @@ export interface StatsBlock {
   headshots: number;
   damage: number;
   mvps: number;
+  /** Kills by weapon class (humans only; bots never count). */
+  killsAwp: number;
+  killsAk47: number;
+  killsPistol: number;
   kd: number;
   adr: number;
   hsPercent: number;
 }
 
-function block(raw: { matches: number; wins: number; losses: number; rounds: number; kills: number; deaths: number; assists: number; headshots: number; damage: number; mvps: number }): StatsBlock {
+function block(raw: { matches: number; wins: number; losses: number; rounds: number; kills: number; deaths: number; assists: number; headshots: number; damage: number; mvps: number; killsAwp: number; killsAk47: number; killsPistol: number }): StatsBlock {
   return { ...raw, winRate: winRate(raw.wins, raw.matches), ...deriveStats(raw) };
 }
 
@@ -114,6 +118,9 @@ export class PlayersService {
           deaths: s?.deaths ?? 0,
           assists: s?.assists ?? 0,
           headshots: s?.headshots ?? 0,
+          killsAwp: s?.killsAwp ?? 0,
+          killsAk47: s?.killsAk47 ?? 0,
+          killsPistol: s?.killsPistol ?? 0,
           damage: s?.damage ?? 0,
           mvps: s?.mvps ?? 0,
         }),
@@ -139,7 +146,7 @@ export class PlayersService {
     const since = new Date(this.clock.nowMs() - days * DAY_MS);
     const where = { userId, mode, finishedAt: { gte: since }, rounds: { gt: 0 } } satisfies Prisma.MatchPlayerWhereInput;
     const [sum, wins, matches] = await Promise.all([
-      this.prisma.matchPlayer.aggregate({ where, _sum: { rounds: true, kills: true, deaths: true, assists: true, headshots: true, damage: true, mvps: true } }),
+      this.prisma.matchPlayer.aggregate({ where, _sum: { rounds: true, kills: true, deaths: true, assists: true, headshots: true, damage: true, mvps: true, killsAwp: true, killsAk47: true, killsPistol: true } }),
       this.prisma.matchPlayer.count({ where: { ...where, won: true } }),
       this.prisma.matchPlayer.count({ where }),
     ]);
@@ -152,6 +159,9 @@ export class PlayersService {
       deaths: sum._sum.deaths ?? 0,
       assists: sum._sum.assists ?? 0,
       headshots: sum._sum.headshots ?? 0,
+      killsAwp: sum._sum.killsAwp ?? 0,
+      killsAk47: sum._sum.killsAk47 ?? 0,
+      killsPistol: sum._sum.killsPistol ?? 0,
       damage: sum._sum.damage ?? 0,
       mvps: sum._sum.mvps ?? 0,
     });
@@ -180,6 +190,9 @@ export class PlayersService {
         deaths: stats?.deaths ?? 0,
         assists: stats?.assists ?? 0,
         headshots: stats?.headshots ?? 0,
+        killsAwp: stats?.killsAwp ?? 0,
+        killsAk47: stats?.killsAk47 ?? 0,
+        killsPistol: stats?.killsPistol ?? 0,
         damage: stats?.damage ?? 0,
         mvps: stats?.mvps ?? 0,
       });

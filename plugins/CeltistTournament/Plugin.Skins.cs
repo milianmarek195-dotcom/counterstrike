@@ -46,22 +46,53 @@ public sealed partial class CeltistTournamentPlugin
         {
             var weapon = handle.Value;
             if (weapon is null || !weapon.IsValid) continue;
-            var def = weapon.AttributeManager.Item.ItemDefinitionIndex;
-            var item = items.FirstOrDefault(i => i.WeaponDefIndex == def);
-            if (item is null) continue;
+            ApplyToWeapon(weapon, steamId, items);
+        }
+    }
+
+    /// <summary>
+    /// Bought and picked-up weapons are new entities: the client only takes the skin if it is set when the weapon is
+    /// created, so this runs for every weapon entity and applies the owner's loadout one frame later (when the owner is set).
+    /// </summary>
+    private void OnWeaponCreated(CEntityInstance entity)
+    {
+        if (!Config.SkinsEnabled || !entity.DesignerName.StartsWith("weapon_", StringComparison.Ordinal)) return;
+        var weapon = new CBasePlayerWeapon(entity.Handle);
+        Server.NextFrame(() =>
+        {
             try
             {
-                weapon.AttributeManager.Item.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
-                weapon.AttributeManager.Item.ItemIDLow = 16384 & 0xFFFFFFFF;
-                weapon.AttributeManager.Item.ItemIDHigh = 0;
-                weapon.AttributeManager.Item.AccountID = (uint)steamId; // the item belongs to the player, otherwise the client ignores the fallback paint
-                weapon.FallbackPaintKit = item.PaintIndex;
-                weapon.FallbackSeed = item.Pattern;
-                weapon.FallbackWear = item.Float;
-                weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
-                Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+                if (!weapon.IsValid) return;
+                var owner = weapon.OwnerEntity.Value;
+                if (owner is null) return;
+                var pawn = new CCSPlayerPawn(owner.Handle);
+                var controllerEntity = pawn.Controller.Value;
+                if (controllerEntity is null) return;
+                var player = new CCSPlayerController(controllerEntity.Handle);
+                if (!IsHuman(player)) return;
+                if (_loadouts.TryGetValue(player.SteamID, out var items)) ApplyToWeapon(weapon, player.SteamID, items);
             }
-            catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon {Def}: {Message}", def, e.Message); }
+            catch (Exception e) { Logger.LogWarning("[Celtist] skin on new weapon failed: {Message}", e.Message); }
+        });
+    }
+
+    private void ApplyToWeapon(CBasePlayerWeapon weapon, ulong steamId, List<SkinItem> items)
+    {
+        var def = weapon.AttributeManager.Item.ItemDefinitionIndex;
+        var item = items.FirstOrDefault(i => i.WeaponDefIndex == def);
+        if (item is null) return;
+        try
+        {
+            weapon.AttributeManager.Item.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
+            weapon.AttributeManager.Item.ItemIDLow = 16384 & 0xFFFFFFFF;
+            weapon.AttributeManager.Item.ItemIDHigh = 0;
+            weapon.AttributeManager.Item.AccountID = (uint)steamId; // the item belongs to the player, otherwise the client ignores the fallback paint
+            weapon.FallbackPaintKit = item.PaintIndex;
+            weapon.FallbackSeed = item.Pattern;
+            weapon.FallbackWear = item.Float;
+            weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
+            Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
         }
+        catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon {Def}: {Message}", def, e.Message); }
     }
 }

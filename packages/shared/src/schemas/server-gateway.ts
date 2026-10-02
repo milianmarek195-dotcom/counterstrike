@@ -84,6 +84,10 @@ export const playerMapStatsSchema = z.object({
   clutches: count.default(0),
   entryKills: count.default(0),
   entryDeaths: count.default(0),
+  /** Weapon-class kills counted by the plugin (humans only). Optional so older plugin versions keep working. */
+  killsAwp: count.default(0),
+  killsAk47: count.default(0),
+  killsPistol: count.default(0),
 });
 export type PlayerMapStatsPayload = z.infer<typeof playerMapStatsSchema>;
 

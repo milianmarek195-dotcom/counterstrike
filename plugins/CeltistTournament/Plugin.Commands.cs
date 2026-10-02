@@ -45,6 +45,7 @@ public sealed partial class CeltistTournamentPlugin
                 if (next is null) return (false, "no map chosen yet");
                 if (Server.MapName != next.Key) ChangeMap(next);
                 _map = new MapProgress { MapNumber = next.MapNumber };
+                _stats.Clear(); // every map starts with fresh counters
                 Server.ExecuteCommand("mp_warmup_end");
                 Server.ExecuteCommand("mp_restartgame 3");
                 Emit("map.started", new() { ["mapNumber"] = next.MapNumber });
@@ -132,7 +133,7 @@ public sealed partial class CeltistTournamentPlugin
         foreach (var p in Utilities.GetPlayers().Where(p => p is { IsBot: false, IsValid: true }))
             Server.ExecuteCommand($"kickid {p.UserId} match_cancelled");
         _plan = null; _map = null; _paused = false;
-        _teamDamage.Clear(); _teamKills.Clear();
+        _teamDamage.Clear(); _teamKills.Clear(); _stats.Clear();
         Server.ExecuteCommand("mp_unpause_match");
         _status = "READY";
     }

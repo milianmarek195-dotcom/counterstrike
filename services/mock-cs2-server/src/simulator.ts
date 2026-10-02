@@ -208,6 +208,8 @@ export class MockCs2Server {
             steamId: p.steamId, team: slot, rounds,
             kills: 8 + ((i * 3 + rounds) % 15), deaths: 6 + ((i * 5 + rounds) % 12), assists: 2 + (i % 5),
             headshots: 4 + (i % 6), damage: 1200 + i * 150, mvps: i % 4, flashAssists: i % 3, utilityDamage: 40 * i, clutches: i % 2, entryKills: i % 3, entryDeaths: i % 2,
+            // weapon-class kills (humans only); they must never add up to more than the kills
+            killsAwp: 2, killsAk47: 3, killsPistol: 1,
           })),
         );
         const result = await this.api.request('POST', `/server/v1/matches/${matchId}/result`, {

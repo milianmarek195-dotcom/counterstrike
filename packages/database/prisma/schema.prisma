@@ -380,6 +380,9 @@ model PlayerStats {
   clutches      Int      @default(0)
   entryKills    Int      @default(0)
   entryDeaths   Int      @default(0)
+  killsAwp      Int      @default(0)
+  killsAk47     Int      @default(0)
+  killsPistol   Int      @default(0)
   updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -948,6 +951,9 @@ model MatchPlayer {
   clutches      Int       @default(0)
   entryKills    Int       @default(0)
   entryDeaths   Int       @default(0)
+  killsAwp      Int      @default(0)
+  killsAk47     Int      @default(0)
+  killsPistol   Int      @default(0)
 
   match     Match                 @relation(fields: [matchId], references: [id], onDelete: Cascade)
   matchTeam MatchTeam?            @relation(fields: [matchTeamId], references: [id], onDelete: SetNull)
@@ -1002,6 +1008,9 @@ model MatchPlayerMapStats {
   clutches      Int    @default(0)
   entryKills    Int    @default(0)
   entryDeaths   Int    @default(0)
+  killsAwp      Int      @default(0)
+  killsAk47     Int      @default(0)
+  killsPistol   Int      @default(0)
 
   matchMap    MatchMap    @relation(fields: [matchMapId], references: [id], onDelete: Cascade)
   matchPlayer MatchPlayer @relation(fields: [matchPlayerId], references: [id], onDelete: Cascade)
