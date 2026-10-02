@@ -96,6 +96,8 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
                 health = new { map, uptimeSeconds = (int)(DateTimeOffset.UtcNow - _startedAt).TotalSeconds },
             }).ConfigureAwait(false);
             if (!response.Ok) Logger.LogWarning("[Celtist] heartbeat rejected: HTTP {Status} {Body}", response.Status, response.Body);
+            else if (_plan is null && response.Json().TryGetProperty("expectedMatchId", out var expected) && expected.ValueKind == JsonValueKind.String)
+                _ = RecoverMatchAsync(expected.GetString()!);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] heartbeat failed: {Message}", e.Message); }
     }
@@ -165,6 +167,31 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] event flush failed: {Message}", e.Message); }
         finally { Interlocked.Exchange(ref _flushing, 0); }
+    }
+
+    private int _recovering;
+
+    /// <summary>
+    /// The backend says this server should host a match we do not know (e.g. the game server was restarted):
+    /// fetch the match description and prepare it exactly like a MATCH_PREPARE command would.
+    /// </summary>
+    private async Task RecoverMatchAsync(string matchId)
+    {
+        if (_api is null || Interlocked.Exchange(ref _recovering, 1) == 1) return;
+        try
+        {
+            var response = await _api.GetAsync($"/server/v1/matches/{matchId}/config").ConfigureAwait(false);
+            if (!response.Ok) { Logger.LogWarning("[Celtist] could not recover match {Match}: HTTP {Status}", matchId, response.Status); return; }
+            var payload = JsonDocument.Parse("{\"config\":" + response.Body + "}").RootElement.Clone();
+            Server.NextFrame(() =>
+            {
+                if (_plan is not null) return;
+                var (ok, reason) = ExecuteCommand("MATCH_PREPARE", matchId, payload);
+                Logger.LogInformation("[Celtist] recovered match {Match}: {Result}", matchId, ok ? "ok" : reason);
+            });
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] match recovery failed: {Message}", e.Message); }
+        finally { await Task.Delay(15000).ConfigureAwait(false); Interlocked.Exchange(ref _recovering, 0); }
     }
 
     private static string? Trim(string? s, int max) => s is null ? null : s.Length <= max ? s : s[..max];
