@@ -115,8 +115,10 @@ public sealed partial class CeltistTournamentPlugin
         Server.ExecuteCommand("mp_match_can_clinch 1");
         Server.ExecuteCommand("sv_pausable 1");
         Server.ExecuteCommand("mp_autokick 0");
-        Server.ExecuteCommand("mp_warmup_pausetimer 1");
-        Server.ExecuteCommand("mp_warmuptime 9999");
+        // the warmup is a fixed countdown (players may still connect and buy), not an endless wait; "Match starten" ends it early
+        Server.ExecuteCommand("mp_warmup_pausetimer 0");
+        Server.ExecuteCommand($"mp_warmuptime {Math.Clamp(Config.WarmupSeconds, 10, 600)}");
+        Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand($"mp_limitteams 0");
         Server.ExecuteCommand("mp_autoteambalance 0");
     }

@@ -15,6 +15,9 @@ public sealed class PluginConfig : BasePluginConfig
     /// <summary>Hex API key shown ONCE when the server was created or its key rotated.</summary>
     [JsonPropertyName("ApiKey")] public string ApiKey { get; set; } = "";
 
+    /// <summary>Length of the warmup before a match; "Match starten" on the website ends it earlier.</summary>
+    [JsonPropertyName("WarmupSeconds")] public int WarmupSeconds { get; set; } = 90;
+
     [JsonPropertyName("HeartbeatSeconds")] public int HeartbeatSeconds { get; set; } = 10;
 
     /// <summary>Long-poll window for commands (the API caps it at 25).</summary>
