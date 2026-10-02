@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button, Card, Empty, ErrorBox, Input, Loading, PageTitle, Select } from '@/components/ui';
+import { Button, Card, Empty, ErrorBox, Input, Loading, PageTitle } from '@/components/ui';
 import { api, useAction, useApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
@@ -108,7 +108,6 @@ function ImportBox({ onDone }: { onDone: () => void }) {
   const act = useAction(() => { setCode(''); onDone(); });
   return (
     <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); void act.run(() => api('/loadouts/import', { method: 'POST', body: { code } })); }}>
-      <Select className="hidden" aria-hidden><option /></Select>
       <Input label="Loadout importieren (CELTIST-XXXXXX)" value={code} onChange={(e) => setCode(e.target.value)} /><Button variant="secondary" disabled={act.busy || code.length < 6}>Import</Button>
       {act.error && <ErrorBox message={act.error} />}
     </form>

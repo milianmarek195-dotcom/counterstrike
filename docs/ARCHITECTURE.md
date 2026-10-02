@@ -1,5 +1,8 @@
 # Celtist Tournament Platform – Architektur
 
+> **Aktualisierung (Erweiterung 2.2):** Dieses Dokument beschreibt die Ursprungsplanung. Maßgeblich sind jetzt: kein Ready-System (Status `READY_CHECK` heißt `LOBBY`, neu `MAP_FORCED`), flexible Teamgrößen je Seite, Party-Leader = Admin bei der Match-Steuerung, virtuelles Inventar mit höchstens 3 Loadouts, Pattern als ganze Zahl 0–1000, Website-first-Ablauf, Wingman nur als Coming-Soon-Seite. Details: `TOURNAMENTS.md`, `SKIN_SYSTEM.md`, `CURRENT_STATUS.md`.
+
+
 Stand: 02.10.2026 · Status: Planungsdokument, Quelle der Wahrheit für alle Phasen.
 Technische Details stehen zusätzlich in [DATABASE.md](DATABASE.md), [TOURNAMENTS.md](TOURNAMENTS.md),
 [PLUGIN.md](PLUGIN.md), [SKIN_SYSTEM.md](SKIN_SYSTEM.md), [SECURITY.md](SECURITY.md) und [DEPLOYMENT.md](DEPLOYMENT.md).
