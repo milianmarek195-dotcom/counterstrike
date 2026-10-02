@@ -182,7 +182,7 @@ function LoadoutBar({ loadouts, limit, target, setTarget, act, loading }: { load
 function Editor({ skin, access, level, loadouts, target, setTarget, onSaved }: { skin: Skin; access: Access | undefined; level: number; loadouts: Loadout[]; target: string | null; setTarget: (id: string) => void; onSaved: () => void }) {
   const canFloat = !!access?.floatEditing;
   const [float, setFloat] = useState(Math.max(skin.minFloat, Math.min(skin.maxFloat, 0.07)));
-  const [pattern, setPattern] = useState('0');
+  const [pattern, setPattern] = useState('1');
   const [statTrak, setStatTrak] = useState(false);
   const [nameTag, setNameTag] = useState('');
   const [stickers, setStickers] = useState<Array<PlacedSticker | null>>(Array(STICKER_SLOTS).fill(null));

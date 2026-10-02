@@ -41,7 +41,7 @@ export const inventoryItemInputSchema = z
     /** null = default finish of the weapon (e.g. only stickers). */
     skinId: z.uuid().nullable().default(null),
     floatValue: floatSchema.default(DEFAULT_FLOAT),
-    paintSeed: paintSeedSchema.default(0),
+    paintSeed: paintSeedSchema.default(1),
     statTrak: z.boolean().default(false),
     statTrakCount: z.number().int().min(0).max(999_999).default(0),
     souvenir: z.boolean().default(false),

@@ -1219,7 +1219,7 @@ model InventoryItem {
   slot           LoadoutSlot
   weaponDefIndex Int
   skinId         String?     @db.Uuid // null = default finish (stickers only)
-  paintSeed      Int         @default(0) // pattern, integer 0..1000
+  paintSeed      Int         @default(1) // pattern, integer 0..1000 (1 unless the player chose another)
   floatValue     Float       @default(0.001) // 0 <= x <= 1 enforced by CHECK constraint and Zod
   statTrak       Boolean     @default(false)
   statTrakCount  Int         @default(0)
