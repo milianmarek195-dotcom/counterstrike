@@ -13,6 +13,7 @@ const links = [
   { href: '/ranking', label: 'Rangliste' },
   { href: '/teams', label: 'Teams' },
   { href: '/party', label: 'Party' },
+  { href: '/profile/loadouts', label: 'Skin-Changer' },
   { href: '/wingman', label: 'Wingman Cups' },
 ];
 
@@ -40,7 +41,7 @@ export function Nav() {
         <Link href="/" className="text-lg font-extrabold tracking-tight text-primary">CELTIST</Link>
         <nav aria-label="Hauptnavigation" className={cn('absolute left-0 top-14 w-full flex-col gap-1 border-b bg-elevated p-3 md:static md:flex md:w-auto md:flex-row md:border-0 md:bg-transparent md:p-0', open ? 'flex' : 'hidden md:flex')}>
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className={cn('rounded-lg px-3 py-2 text-sm font-medium hover:bg-card-hover', path.startsWith(l.href) && 'text-primary')}>{l.label}</Link>
+            <Link key={l.href} href={l.href} className={cn('rounded-lg px-3 py-2 text-sm font-medium hover:bg-card-hover', path === l.href && 'text-primary')}>{l.label}</Link>
           ))}
           {can('admin.access') && <Link href="/admin" className="rounded-lg px-3 py-2 text-sm font-medium text-accent hover:bg-card-hover">Admin</Link>}
         </nav>
