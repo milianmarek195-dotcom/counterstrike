@@ -1,0 +1,45 @@
+{
+  "name": "celtist-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CS2 tournament platform: web, API, database, CS2 server plugin",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "bootstrap": "npm run build -w @celtist/shared && npm run generate -w @celtist/database",
+    "build": "npm run build -w @celtist/shared && npm run generate -w @celtist/database && npm run build -w @celtist/database && npm run build -w @celtist/api && npm run build -w @celtist/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run migrate:dev -w @celtist/database",
+    "db:seed": "npm run seed -w @celtist/database",
+    "dev:api": "npm run start:dev -w @celtist/api",
+    "dev:web": "npm run dev -w @celtist/web",
+    "dev:mock-server": "npm run start -w @celtist/mock-cs2-server",
+    "dev:api-mock": "npm run start:dev-mock -w @celtist/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "embedded-postgres": "^17.10.0-beta.17",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.9.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.0.0"
+  },
+  "allowScripts": {
+    "prisma": true,
+    "@prisma/engines": true,
+    "esbuild": true
+  }
+}

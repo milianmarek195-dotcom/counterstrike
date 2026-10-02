@@ -1,0 +1,24 @@
+{
+  "name": "@celtist/mock-cs2-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulated CS2 game server speaking the same signed protocol as the CeltistTournament plugin (development and end-to-end tests)",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@celtist/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "vitest": "^4.1.2"
+  },
+  "exports": {
+    "./client": "./src/client.ts",
+    "./simulator": "./src/simulator.ts"
+  }
+}

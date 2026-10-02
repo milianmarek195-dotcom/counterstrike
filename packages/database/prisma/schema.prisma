@@ -1,0 +1,1288 @@
+// Celtist Tournament Platform – database schema (PostgreSQL, Prisma 7)
+// Conventions: UUIDv7 ids, camelCase columns, snake_case plural tables.
+// Constraints Prisma cannot express (CHECK, partial unique indexes) live in
+// prisma/migrations/*_integrity_constraints/migration.sql and are documented in docs/DATABASE.md.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum GameMode {
+  FIVE_V_FIVE
+  WINGMAN
+}
+
+enum TeamSlot {
+  A
+  B
+}
+
+enum TournamentFormat {
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+  ROUND_ROBIN
+  SWISS
+}
+
+enum TournamentStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  FINISHED
+  CANCELLED
+}
+
+enum TournamentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum SeedingMethod {
+  ELO
+  RANDOM
+  MANUAL
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  ASSIGNED
+  WITHDRAWN
+}
+
+enum TournamentTeamStatus {
+  PENDING
+  CONFIRMED
+  DISQUALIFIED
+  WITHDRAWN
+}
+
+enum BracketSide {
+  UPPER
+  LOWER
+  GRAND_FINAL
+  GROUP
+}
+
+enum MatchKind {
+  TOURNAMENT
+  MATCHMAKING
+  CUSTOM
+}
+
+enum MatchStatus {
+  SCHEDULED
+  WAITING
+  LOBBY
+  VETO
+  MAP_FORCED
+  CONFIGURING
+  LIVE
+  FINISHED
+  CANCELLED
+  SERVER_ERROR
+}
+
+enum MatchResultType {
+  NORMAL
+  FORFEIT
+  ADMIN_DECISION
+}
+
+enum MatchMapStatus {
+  PENDING
+  LIVE
+  FINISHED
+  SKIPPED
+}
+
+enum VetoActionType {
+  BAN
+  PICK
+  SIDE
+  DECIDER
+}
+
+enum StartingSide {
+  CT
+  T
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  STARTING
+  READY
+  IN_USE
+  ERROR
+}
+
+enum AdminActionType {
+  MATCH_PREPARE
+  MATCH_START
+  MATCH_PAUSE
+  MATCH_UNPAUSE
+  MATCH_RESUME
+  MATCH_RESTART
+  MATCH_CHANGE_MAP
+  MATCH_FORCE_TEAM
+  MATCH_REMOVE_PLAYER
+  MATCH_PARDON_PLAYER
+  MATCH_SET_SCORE
+  MATCH_CANCEL
+  PLAYER_REFRESH_SKINS
+  SERVER_RELOAD_CONFIG
+}
+
+enum AdminActionStatus {
+  PENDING
+  DELIVERED
+  ACKED
+  FAILED
+  EXPIRED
+}
+
+enum BanType {
+  PLATFORM
+  MATCH
+}
+
+enum TeamRole {
+  CAPTAIN
+  MEMBER
+  SUBSTITUTE
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+enum PartyStatus {
+  OPEN
+  QUEUED
+  IN_MATCH
+}
+
+enum EloOutcome {
+  WIN
+  LOSS
+  DRAW
+}
+
+enum LoadoutVisibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+enum LoadoutSlot {
+  KNIFE
+  GLOVES
+  PISTOL
+  RIFLE
+  AWP
+  SMG
+  SHOTGUN
+  MACHINE_GUN
+}
+
+enum SkinVariant {
+  NORMAL
+  STATTRAK
+  SOUVENIR
+}
+
+enum SkinWear {
+  FACTORY_NEW
+  MINIMAL_WEAR
+  FIELD_TESTED
+  WELL_WORN
+  BATTLE_SCARRED
+  NONE
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+model User {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  steamId     String    @unique @db.VarChar(20)
+  displayName String    @db.VarChar(64)
+  avatarUrl   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  steamProfile SteamProfile?
+  sessions     Session[]
+  roles        UserRole[]
+
+  ranks                  PlayerRank[]
+  stats                  PlayerStats[]
+  eloChanges             EloChange[]
+  matchPlayers           MatchPlayer[]
+  teamMemberships        TeamMember[]
+  teamsCaptained         Team[]                   @relation("TeamCaptain")
+  teamInvitesReceived    TeamInvite[]             @relation("TeamInviteInvitee")
+  teamInvitesSent        TeamInvite[]             @relation("TeamInviteInviter")
+  partyLed               Party?                   @relation("PartyLeader")
+  partyMembership        PartyMember?
+  partyInvitesRecv       PartyInvite[]            @relation("PartyInviteInvitee")
+  partyInvitesSent       PartyInvite[]            @relation("PartyInviteInviter")
+  registrations          TournamentRegistration[]
+  tournamentTeamSlots    TournamentTeamMember[]
+  tournamentsCreated     Tournament[]             @relation("TournamentCreator")
+  loadouts               Loadout[]
+  inventory              InventoryItem[]
+  matchesControlled      Match[]                  @relation("MatchController")
+  skinPermissions        SkinPermission[]         @relation("SkinPermissionTarget")
+  skinPermissionsGranted SkinPermission[]         @relation("SkinPermissionGranter")
+  bans                   Ban[]                    @relation("BanTarget")
+  bansIssued             Ban[]                    @relation("BanIssuer")
+  bansRevoked            Ban[]                    @relation("BanRevoker")
+  auditLogs              AuditLog[]
+  adminActions           AdminAction[]
+  notifications          Notification[]
+  vetoActions            MatchVetoAction[]
+  webhooksCreated        WebhookEndpoint[]
+  settingsUpdated        PlatformSetting[]
+  rolesGranted           UserRole[]               @relation("RoleGranter")
+
+  @@index([displayName])
+  @@map("users")
+}
+
+model SteamProfile {
+  userId           String    @id @db.Uuid
+  personaName      String    @db.VarChar(128)
+  avatarSmall      String?
+  avatarMedium     String?
+  avatarFull       String?
+  profileUrl       String?
+  countryCode      String?   @db.VarChar(2)
+  visibilityState  Int       @default(1)
+  accountCreatedAt DateTime? // Steam "timecreated"; null for private profiles
+  lastSyncedAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastSyncedAt])
+  @@map("steam_profiles")
+}
+
+model Session {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @db.Uuid
+  tokenHash         String    @unique @db.VarChar(64) // SHA-256 hex of the opaque cookie token
+  ip                String?   @db.VarChar(64)
+  userAgent         String?   @db.VarChar(256)
+  createdAt         DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([absoluteExpiresAt])
+  @@map("sessions")
+}
+
+model Role {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  key         String   @unique @db.VarChar(40)
+  name        String   @db.VarChar(64)
+  description String?
+  isSystem    Boolean  @default(false)
+  position    Int      @default(100)
+  createdAt   DateTime @default(now())
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId     String @db.Uuid
+  permission String @db.VarChar(64)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permission])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId      String   @db.Uuid
+  roleId      String   @db.Uuid
+  grantedById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  grantedBy User? @relation("RoleGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ───────────────────────────── Ranking & stats ─────────────────────────────
+
+model PlayerRank {
+  userId        String    @db.Uuid
+  mode          GameMode
+  elo           Int       @default(1000)
+  peakElo       Int       @default(1000)
+  currentStreak Int       @default(0) // > 0 win streak, < 0 loss streak
+  bestWinStreak Int       @default(0)
+  wins          Int       @default(0)
+  losses        Int       @default(0)
+  draws         Int       @default(0)
+  matches       Int       @default(0)
+  lastMatchAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode])
+  @@index([mode, elo(sort: Desc)])
+  @@index([mode, wins(sort: Desc)])
+  @@map("player_ranks")
+}
+
+model PlayerStats {
+  userId        String   @db.Uuid
+  mode          GameMode
+  rounds        Int      @default(0)
+  kills         Int      @default(0)
+  deaths        Int      @default(0)
+  assists       Int      @default(0)
+  headshots     Int      @default(0)
+  damage        Int      @default(0)
+  mvps          Int      @default(0)
+  flashAssists  Int      @default(0)
+  utilityDamage Int      @default(0)
+  clutches      Int      @default(0)
+  entryKills    Int      @default(0)
+  entryDeaths   Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode])
+  @@index([mode, kills(sort: Desc)])
+  @@map("player_stats")
+}
+
+// One row per player per finalized match. The unique key makes double Elo application impossible.
+model EloChange {
+  id              String     @id @default(uuid(7)) @db.Uuid
+  matchId         String     @db.Uuid
+  userId          String     @db.Uuid
+  mode            GameMode
+  outcome         EloOutcome
+  eloBefore       Int
+  eloAfter        Int
+  delta           Int
+  kFactor         Int
+  expectedScore   Float
+  ownTeamElo      Int
+  opponentTeamElo Int
+  revertedAt      DateTime?
+  createdAt       DateTime   @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("elo_changes")
+}
+
+model RankTier {
+  id       String @id @default(uuid(7)) @db.Uuid
+  key      String @unique @db.VarChar(32)
+  name     String @db.VarChar(32)
+  minElo   Int    @unique
+  color    String @db.VarChar(16)
+  position Int
+
+  @@map("rank_tiers")
+}
+
+model PlatformSetting {
+  key         String   @id @db.VarChar(80)
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.Uuid
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("platform_settings")
+}
+
+// ───────────────────────────── Maps & veto ─────────────────────────────
+
+model GameMap {
+  id         String     @id @default(uuid(7)) @db.Uuid
+  key        String     @unique @db.VarChar(64) // engine name, e.g. de_mirage
+  name       String     @db.VarChar(64) // display name, e.g. Mirage
+  imageUrl   String?
+  workshopId String?    @db.VarChar(32)
+  modes      GameMode[]
+  active     Boolean    @default(true)
+  position   Int        @default(100)
+  createdAt  DateTime   @default(now())
+
+  pools       MapPoolMap[]
+  matchMaps   MatchMap[]
+  vetoActions MatchVetoAction[]
+
+  @@map("maps")
+}
+
+model MapPool {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  name      String    @unique @db.VarChar(64)
+  mode      GameMode?
+  isDefault Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  maps        MapPoolMap[]
+  tournaments Tournament[]
+  matches     Match[]
+
+  @@map("map_pools")
+}
+
+model MapPoolMap {
+  mapPoolId String @db.Uuid
+  mapId     String @db.Uuid
+  position  Int    @default(0)
+
+  mapPool MapPool @relation(fields: [mapPoolId], references: [id], onDelete: Cascade)
+  map     GameMap @relation(fields: [mapId], references: [id], onDelete: Restrict)
+
+  @@id([mapPoolId, mapId])
+  @@index([mapId])
+  @@map("map_pool_maps")
+}
+
+// steps: [{ "team": "A"|"B", "action": "BAN"|"PICK"|"DECIDER" }] – validated by vetoTemplateSchema (packages/shared)
+model VetoTemplate {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @db.VarChar(64)
+  bestOf    Int
+  steps     Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournaments Tournament[]
+  matches     Match[]
+
+  @@index([bestOf, isDefault])
+  @@map("veto_templates")
+}
+
+// ───────────────────────────── Teams & parties ─────────────────────────────
+
+model Team {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  name        String    @db.VarChar(40)
+  nameKey     String    @unique @db.VarChar(40) // lower-cased, trimmed name for case-insensitive uniqueness
+  tag         String?   @db.VarChar(6)
+  mode        GameMode
+  logoUrl     String?
+  captainId   String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  disbandedAt DateTime?
+
+  captain           User             @relation("TeamCaptain", fields: [captainId], references: [id], onDelete: Restrict)
+  members           TeamMember[]
+  invites           TeamInvite[]
+  tournamentEntries TournamentTeam[]
+  matchTeams        MatchTeam[]
+
+  @@index([mode, disbandedAt])
+  @@index([captainId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  teamId   String   @db.Uuid
+  userId   String   @db.Uuid
+  mode     GameMode // denormalised from Team: a user can be in one team per mode
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@unique([userId, mode])
+  @@map("team_members")
+}
+
+model TeamInvite {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  teamId      String       @db.Uuid
+  inviteeId   String       @db.Uuid
+  invitedById String       @db.Uuid
+  status      InviteStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+  respondedAt DateTime?
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitee   User @relation("TeamInviteInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  invitedBy User @relation("TeamInviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([inviteeId, status])
+  @@index([teamId, status])
+  @@map("team_invites")
+}
+
+model Party {
+  id        String      @id @default(uuid(7)) @db.Uuid
+  leaderId  String      @unique @db.Uuid
+  mode      GameMode    @default(FIVE_V_FIVE)
+  status    PartyStatus @default(OPEN)
+  queuedAt  DateTime?
+  createdAt DateTime    @default(now())
+
+  leader  User          @relation("PartyLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  members PartyMember[]
+  invites PartyInvite[]
+
+  @@index([status, mode])
+  @@map("parties")
+}
+
+model PartyMember {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  partyId  String   @db.Uuid
+  userId   String   @unique @db.Uuid // a user is in at most one party
+  ready    Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  party Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([partyId])
+  @@map("party_members")
+}
+
+model PartyInvite {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  partyId     String       @db.Uuid
+  inviteeId   String       @db.Uuid
+  invitedById String       @db.Uuid
+  status      InviteStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+
+  party     Party @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  invitee   User  @relation("PartyInviteInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  invitedBy User  @relation("PartyInviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([inviteeId, status])
+  @@index([partyId, status])
+  @@map("party_invites")
+}
+
+// ───────────────────────────── Servers ─────────────────────────────
+
+model Server {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  name            String       @db.VarChar(64)
+  ip              String       @db.VarChar(64)
+  port            Int
+  region          String       @db.VarChar(16)
+  status          ServerStatus @default(OFFLINE)
+  maxPlayers      Int          @default(12)
+  playerCount     Int          @default(0)
+  enabled         Boolean      @default(true)
+  maintenanceHold Boolean      @default(false)
+  skinsEnabled    Boolean      @default(false)
+  keyVersion      Int          @default(1)
+  pluginVersion   String?      @db.VarChar(32)
+  gameVersion     String?      @db.VarChar(32)
+  health          Json?
+  lastHeartbeatAt DateTime?
+  currentMatchId  String?      @unique @db.Uuid
+  reservedUntil   DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  currentMatch Match?             @relation("ServerCurrentMatch", fields: [currentMatchId], references: [id], onDelete: SetNull)
+  matches      Match[]            @relation("MatchServer")
+  events       ServerEvent[]
+  actions      AdminAction[]
+  tournaments  TournamentServer[]
+
+  @@unique([ip, port])
+  @@index([status, lastHeartbeatAt])
+  @@map("servers")
+}
+
+model ServerEvent {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  serverId        String   @db.Uuid
+  matchId         String?  @db.Uuid
+  type            String   @db.VarChar(64)
+  seq             Int?
+  idempotencyKey  String   @unique @db.VarChar(128)
+  payload         Json
+  serverTimestamp DateTime
+  receivedAt      DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  match  Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  @@index([matchId, receivedAt])
+  @@index([serverId, receivedAt])
+  @@index([receivedAt])
+  @@map("server_events")
+}
+
+// Commands directed at a server/match (the plugin long-polls these). Every row also yields an AuditLog entry.
+model AdminAction {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  serverId       String            @db.Uuid
+  matchId        String?           @db.Uuid
+  type           AdminActionType
+  payload        Json              @default("{}")
+  status         AdminActionStatus @default(PENDING)
+  issuedById     String?           @db.Uuid
+  idempotencyKey String?           @unique @db.VarChar(128)
+  failureReason  String?
+  createdAt      DateTime          @default(now())
+  deliveredAt    DateTime?
+  ackedAt        DateTime?
+  expiresAt      DateTime
+
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  match    Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  issuedBy User?  @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([serverId, status, createdAt])
+  @@index([matchId])
+  @@map("admin_actions")
+}
+
+// ───────────────────────────── Tournaments ─────────────────────────────
+
+model Tournament {
+  id                 String               @id @default(uuid(7)) @db.Uuid
+  name               String               @db.VarChar(80)
+  description        String?
+  rules              String?
+  status             TournamentStatus     @default(DRAFT)
+  format             TournamentFormat
+  mode               GameMode
+  teamSize           Int
+  maxTeams           Int
+  minTeams           Int                  @default(2)
+  bestOf             Int                  @default(1)
+  bestOfFinal        Int?
+  grandFinalReset    Boolean              @default(true)
+  seedingMethod      SeedingMethod        @default(ELO)
+  visibility         TournamentVisibility @default(PUBLIC)
+  registrationOpen   Boolean              @default(false)
+  allowSubstitutes   Boolean              @default(true)
+  substitutesPerTeam Int                  @default(1)
+  minElo             Int?
+  maxElo             Int?
+  passwordHash       String?
+  startsAt           DateTime
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  mapPoolId          String               @db.Uuid
+  vetoTemplateId     String?              @db.Uuid
+  settings           Json                 @default("{}")
+  createdById        String?              @db.Uuid
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  mapPool       MapPool                  @relation(fields: [mapPoolId], references: [id], onDelete: Restrict)
+  vetoTemplate  VetoTemplate?            @relation(fields: [vetoTemplateId], references: [id], onDelete: SetNull)
+  createdBy     User?                    @relation("TournamentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  registrations TournamentRegistration[]
+  teams         TournamentTeam[]
+  members       TournamentTeamMember[]
+  matches       TournamentMatch[]
+  servers       TournamentServer[]
+
+  @@index([status, startsAt])
+  @@index([visibility, status])
+  @@map("tournaments")
+}
+
+// Optional restriction of a tournament to specific servers (empty = any READY server).
+model TournamentServer {
+  tournamentId String @db.Uuid
+  serverId     String @db.Uuid
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  server     Server     @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@id([tournamentId, serverId])
+  @@map("tournament_servers")
+}
+
+// Solo sign-up; admins (or auto-balance) group registrations into TournamentTeams.
+model TournamentRegistration {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  tournamentId      String             @db.Uuid
+  userId            String             @db.Uuid
+  status            RegistrationStatus @default(REGISTERED)
+  eloAtRegistration Int
+  createdAt         DateTime           @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([userId])
+  @@map("tournament_registrations")
+}
+
+model TournamentTeam {
+  id           String               @id @default(uuid(7)) @db.Uuid
+  tournamentId String               @db.Uuid
+  teamId       String?              @db.Uuid
+  name         String               @db.VarChar(40)
+  nameKey      String               @db.VarChar(40)
+  logoUrl      String?
+  seed         Int?
+  averageElo   Int                  @default(1000)
+  status       TournamentTeamStatus @default(PENDING)
+  placement    Int?
+  createdAt    DateTime             @default(now())
+
+  tournament Tournament             @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team       Team?                  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  members    TournamentTeamMember[]
+  matchesA   TournamentMatch[]      @relation("TournamentMatchTeamA")
+  matchesB   TournamentMatch[]      @relation("TournamentMatchTeamB")
+  matchesWon TournamentMatch[]      @relation("TournamentMatchWinner")
+  matchTeams MatchTeam[]
+
+  @@unique([tournamentId, nameKey])
+  @@unique([tournamentId, seed])
+  @@index([teamId])
+  @@map("tournament_teams")
+}
+
+// Roster snapshot. tournamentId is denormalised so a player can only be in one team per tournament.
+model TournamentTeamMember {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  tournamentId     String   @db.Uuid
+  tournamentTeamId String   @db.Uuid
+  userId           String   @db.Uuid
+  role             TeamRole @default(MEMBER)
+
+  tournament     Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournamentTeam TournamentTeam @relation(fields: [tournamentTeamId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentTeamId])
+  @@map("tournament_team_members")
+}
+
+// Bracket node. winnerNext/loserNext describe where the participants advance to.
+model TournamentMatch {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  tournamentId   String      @db.Uuid
+  matchId        String?     @unique @db.Uuid // null for byes: no game is played
+  key            String      @db.VarChar(16) // bracket node key from the generator (U1-0, L3-1, GF-1, T-1)
+  side           BracketSide
+  round          Int
+  position       Int
+  label          String?     @db.VarChar(48)
+  teamAId        String?     @db.Uuid
+  teamBId        String?     @db.Uuid
+  winnerId       String?     @db.Uuid
+  isBye          Boolean     @default(false)
+  winnerNextId   String?     @db.Uuid
+  winnerNextSlot TeamSlot?
+  loserNextId    String?     @db.Uuid
+  loserNextSlot  TeamSlot?
+
+  tournament     Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  match          Match?            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  teamA          TournamentTeam?   @relation("TournamentMatchTeamA", fields: [teamAId], references: [id], onDelete: SetNull)
+  teamB          TournamentTeam?   @relation("TournamentMatchTeamB", fields: [teamBId], references: [id], onDelete: SetNull)
+  winner         TournamentTeam?   @relation("TournamentMatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  winnerNext     TournamentMatch?  @relation("WinnerNext", fields: [winnerNextId], references: [id], onDelete: SetNull)
+  loserNext      TournamentMatch?  @relation("LoserNext", fields: [loserNextId], references: [id], onDelete: SetNull)
+  feedsWinnersTo TournamentMatch[] @relation("WinnerNext")
+  feedsLosersTo  TournamentMatch[] @relation("LoserNext")
+
+  @@unique([tournamentId, key])
+  @@unique([tournamentId, side, round, position])
+  @@index([tournamentId, round])
+  @@map("tournament_matches")
+}
+
+// ───────────────────────────── Matches ─────────────────────────────
+
+model Match {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  kind           MatchKind        @default(TOURNAMENT)
+  mode           GameMode
+  status         MatchStatus      @default(SCHEDULED)
+  bestOf         Int              @default(1)
+  mapPoolId      String?          @db.Uuid
+  vetoTemplateId String?          @db.Uuid
+  vetoStartsWith TeamSlot?
+  vetoDeadline   DateTime?
+  // Snapshot taken when the veto starts: { maps: string[] (map ids), steps: VetoTemplateStep[] }
+  vetoConfig     Json?
+  serverId       String?          @db.Uuid
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  pausedAt       DateTime?
+  pausedByTeam   TeamSlot?
+  winnerSlot     TeamSlot?
+  resultType     MatchResultType?
+  finalizedKey   String?          @unique @db.VarChar(128)
+  cancelReason   String?
+  createdById    String?          @db.Uuid
+  // Party leader (or creator) who steers this match together with the admins. Null for tournament matches (admins only).
+  controllerId   String?          @db.Uuid
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  controller      User?             @relation("MatchController", fields: [controllerId], references: [id], onDelete: SetNull)
+  mapPool         MapPool?          @relation(fields: [mapPoolId], references: [id], onDelete: SetNull)
+  vetoTemplate    VetoTemplate?     @relation(fields: [vetoTemplateId], references: [id], onDelete: SetNull)
+  server          Server?           @relation("MatchServer", fields: [serverId], references: [id], onDelete: SetNull)
+  hostedOn        Server?           @relation("ServerCurrentMatch")
+  tournamentMatch TournamentMatch?
+  teams           MatchTeam[]
+  players         MatchPlayer[]
+  maps            MatchMap[]
+  vetoActions     MatchVetoAction[]
+  eloChanges      EloChange[]
+  events          ServerEvent[]
+  actions         AdminAction[]
+  bans            Ban[]
+
+  @@index([status, scheduledAt])
+  @@index([finishedAt(sort: Desc)])
+  @@index([serverId])
+  @@index([kind, status])
+  @@map("matches")
+}
+
+model MatchTeam {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  matchId          String   @db.Uuid
+  slot             TeamSlot
+  name             String   @db.VarChar(40)
+  teamId           String?  @db.Uuid
+  tournamentTeamId String?  @db.Uuid
+  averageElo       Int      @default(1000)
+  seriesScore      Int      @default(0)
+  // Each side has its own size: 2v3, 3v4, 1v1 … all work. The engine never assumes equal teams.
+  maxPlayers       Int      @default(5)
+
+  match          Match           @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team           Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  tournamentTeam TournamentTeam? @relation(fields: [tournamentTeamId], references: [id], onDelete: SetNull)
+  players        MatchPlayer[]
+
+  @@unique([matchId, slot])
+  @@index([teamId])
+  @@index([tournamentTeamId])
+  @@map("match_teams")
+}
+
+model MatchPlayer {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  matchId       String    @db.Uuid
+  matchTeamId   String?   @db.Uuid // null = in the match lobby but not assigned to a team yet
+  userId        String    @db.Uuid
+  steamId       String    @db.VarChar(20)
+  mode          GameMode
+  isSubstitute  Boolean   @default(false)
+  isCaptain     Boolean   @default(false)
+  connectedAt   DateTime?
+  removedAt     DateTime?
+  removalReason String?
+  won           Boolean?
+  finishedAt    DateTime? // denormalised from Match for the 30-day index
+  eloBefore     Int?
+  eloAfter      Int?
+  eloDelta      Int?
+  rounds        Int       @default(0)
+  kills         Int       @default(0)
+  deaths        Int       @default(0)
+  assists       Int       @default(0)
+  headshots     Int       @default(0)
+  damage        Int       @default(0)
+  mvps          Int       @default(0)
+  flashAssists  Int       @default(0)
+  utilityDamage Int       @default(0)
+  clutches      Int       @default(0)
+  entryKills    Int       @default(0)
+  entryDeaths   Int       @default(0)
+
+  match     Match                 @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  matchTeam MatchTeam?            @relation(fields: [matchTeamId], references: [id], onDelete: SetNull)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mapStats  MatchPlayerMapStats[]
+
+  @@unique([matchId, userId])
+  @@index([userId, finishedAt(sort: Desc)])
+  @@index([steamId])
+  @@index([matchTeamId])
+  @@map("match_players")
+}
+
+model MatchMap {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  matchId        String         @db.Uuid
+  mapNumber      Int
+  mapId          String         @db.Uuid
+  pickedBy       TeamSlot?
+  teamAStartSide StartingSide?
+  status         MatchMapStatus @default(PENDING)
+  scoreA         Int            @default(0)
+  scoreB         Int            @default(0)
+  rounds         Int?
+  winnerSlot     TeamSlot?
+  resultKey      String?        @unique @db.VarChar(128)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  match Match                 @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  map   GameMap               @relation(fields: [mapId], references: [id], onDelete: Restrict)
+  stats MatchPlayerMapStats[]
+
+  @@unique([matchId, mapNumber])
+  @@index([mapId])
+  @@map("match_maps")
+}
+
+model MatchPlayerMapStats {
+  id            String @id @default(uuid(7)) @db.Uuid
+  matchMapId    String @db.Uuid
+  matchPlayerId String @db.Uuid
+  rounds        Int    @default(0)
+  kills         Int    @default(0)
+  deaths        Int    @default(0)
+  assists       Int    @default(0)
+  headshots     Int    @default(0)
+  damage        Int    @default(0)
+  mvps          Int    @default(0)
+  flashAssists  Int    @default(0)
+  utilityDamage Int    @default(0)
+  clutches      Int    @default(0)
+  entryKills    Int    @default(0)
+  entryDeaths   Int    @default(0)
+
+  matchMap    MatchMap    @relation(fields: [matchMapId], references: [id], onDelete: Cascade)
+  matchPlayer MatchPlayer @relation(fields: [matchPlayerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchMapId, matchPlayerId])
+  @@index([matchPlayerId])
+  @@map("match_player_map_stats")
+}
+
+// One row per executed veto step. DECIDER rows have no acting team; SIDE rows reference the map the side applies to
+// and carry the chosen starting side of the acting team. (matchId, mapId) is unique for BAN/PICK/DECIDER (partial index).
+model MatchVetoAction {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  matchId       String         @db.Uuid
+  stepIndex     Int
+  team          TeamSlot?
+  action        VetoActionType
+  mapId         String         @db.Uuid
+  side          StartingSide?
+  actedByUserId String?        @db.Uuid
+  auto          Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  map     GameMap @relation(fields: [mapId], references: [id], onDelete: Restrict)
+  actedBy User?   @relation(fields: [actedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([matchId, stepIndex])
+  @@index([mapId])
+  @@map("match_veto_actions")
+}
+
+// ───────────────────────────── Moderation, audit, notifications ─────────────────────────────
+
+model Ban {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  userId       String    @db.Uuid
+  type         BanType
+  matchId      String?   @db.Uuid
+  reason       String
+  issuedById   String?   @db.Uuid
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  revokedById  String?   @db.Uuid
+  revokeReason String?
+  createdAt    DateTime  @default(now())
+
+  user      User   @relation("BanTarget", fields: [userId], references: [id], onDelete: Cascade)
+  match     Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  issuedBy  User?  @relation("BanIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  revokedBy User?  @relation("BanRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, type, revokedAt])
+  @@index([createdAt(sort: Desc)])
+  @@index([matchId])
+  @@map("bans")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  actorId     String?  @db.Uuid // null = system / server
+  actorLabel  String   @db.VarChar(128) // display name or "system", kept even if the user changes name
+  action      String   @db.VarChar(80)
+  targetType  String   @db.VarChar(40)
+  targetId    String?  @db.VarChar(64)
+  targetLabel String?  @db.VarChar(128)
+  reason      String?
+  oldValue    Json?
+  newValue    Json?
+  metadata    Json?
+  ip          String?  @db.VarChar(64)
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @db.Uuid
+  type      String    @db.VarChar(48)
+  title     String    @db.VarChar(120)
+  body      String?
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model WebhookEndpoint {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  name           String    @db.VarChar(64)
+  urlEncrypted   String
+  events         String[]
+  enabled        Boolean   @default(true)
+  createdById    String?   @db.Uuid
+  lastDeliveryAt DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@map("webhook_endpoints")
+}
+
+// ───────────────────────────── Skins & loadouts ─────────────────────────────
+
+model Skin {
+  id                String      @id @default(uuid(7)) @db.Uuid
+  externalId        String?     @unique @db.VarChar(64) // id in the catalog source (e.g. ByMykel "skin-282")
+  weaponDefIndex    Int // CS2 item definition index (7 = AK-47)
+  weaponClass       String      @db.VarChar(64) // engine class name, e.g. weapon_ak47
+  weaponName        String      @db.VarChar(64) // display name
+  slot              LoadoutSlot
+  paintIndex        Int // paint kit id; 0 = vanilla
+  name              String      @db.VarChar(96)
+  rarity            String?     @db.VarChar(48)
+  collection        String?     @db.VarChar(96)
+  minFloat          Float       @default(0)
+  maxFloat          Float       @default(1)
+  statTrakAvailable Boolean     @default(false)
+  souvenirAvailable Boolean     @default(false)
+  imageUrl          String?
+  priceMaxUsd       Float? // denormalised: highest known price across wears/variants
+  priceUpdatedAt    DateTime?
+  active            Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  prices         SkinPrice[]
+  inventoryItems InventoryItem[]
+
+  @@unique([weaponDefIndex, paintIndex])
+  @@index([slot, active])
+  @@index([name])
+  @@index([priceMaxUsd])
+  @@map("skins")
+}
+
+model SkinPrice {
+  id        String      @id @default(uuid(7)) @db.Uuid
+  skinId    String      @db.Uuid
+  wear      SkinWear
+  variant   SkinVariant @default(NORMAL)
+  priceUsd  Float
+  source    String      @db.VarChar(32)
+  fetchedAt DateTime
+
+  skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
+
+  @@unique([skinId, wear, variant])
+  @@index([fetchedAt])
+  @@map("skin_prices")
+}
+
+model Sticker {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  externalId     String?   @unique @db.VarChar(64)
+  defIndex       Int       @unique
+  name           String    @db.VarChar(128)
+  rarity         String?   @db.VarChar(48)
+  tournament     String?   @db.VarChar(96)
+  imageUrl       String?
+  priceUsd       Float?
+  priceUpdatedAt DateTime?
+  active         Boolean   @default(true)
+
+  inventoryStickers InventoryItemSticker[]
+
+  @@index([name])
+  @@map("stickers")
+}
+
+model Loadout {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  ownerId        String            @db.Uuid
+  name           String            @db.VarChar(40)
+  shareCode      String            @unique @db.VarChar(24)
+  visibility     LoadoutVisibility @default(PRIVATE)
+  isActive       Boolean           @default(false) // at most one active loadout per user (partial unique index)
+  importedFromId String?           @db.Uuid
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  owner User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items LoadoutItem[]
+
+  @@index([ownerId])
+  @@index([visibility, createdAt(sort: Desc)])
+  @@map("loadouts")
+}
+
+// A virtual inventory item: one fully configured weapon skin a player saved (weapon, paint kit, float, pattern,
+// StatTrak/Souvenir, stickers). Purely a server-side configuration – it never touches the Steam inventory.
+model InventoryItem {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  ownerId        String      @db.Uuid
+  slot           LoadoutSlot
+  weaponDefIndex Int
+  skinId         String?     @db.Uuid // null = default finish (stickers only)
+  paintSeed      Int         @default(0) // pattern, integer 0..1000
+  floatValue     Float       @default(0.001) // 0 <= x <= 1 enforced by CHECK constraint and Zod
+  statTrak       Boolean     @default(false)
+  statTrakCount  Int         @default(0)
+  souvenir       Boolean     @default(false)
+  nameTag        String?     @db.VarChar(20)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  owner        User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  skin         Skin?                  @relation(fields: [skinId], references: [id], onDelete: SetNull)
+  stickers     InventoryItemSticker[]
+  loadoutItems LoadoutItem[]
+
+  @@index([ownerId, weaponDefIndex])
+  @@index([skinId])
+  @@map("inventory_items")
+}
+
+model InventoryItemSticker {
+  id        String @id @default(uuid(7)) @db.Uuid
+  itemId    String @db.Uuid
+  stickerId String @db.Uuid
+  slotIndex Int // 0..4
+  wear      Float  @default(0)
+  offsetX   Float?
+  offsetY   Float?
+  rotation  Float?
+  scale     Float?
+
+  item    InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  sticker Sticker       @relation(fields: [stickerId], references: [id], onDelete: Restrict)
+
+  @@unique([itemId, slotIndex])
+  @@index([stickerId])
+  @@map("inventory_item_stickers")
+}
+
+// A loadout picks at most one inventory item per weapon.
+model LoadoutItem {
+  id              String @id @default(uuid(7)) @db.Uuid
+  loadoutId       String @db.Uuid
+  inventoryItemId String @db.Uuid
+  weaponDefIndex  Int
+
+  loadout       Loadout       @relation(fields: [loadoutId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([loadoutId, weaponDefIndex])
+  @@index([inventoryItemId])
+  @@map("loadout_items")
+}
+
+// History of skin-changer grants. The effective grant is the newest row that is neither revoked,
+// superseded nor expired; expiry is evaluated at read time, the cleanup job only tidies up.
+model SkinPermission {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  userId         String    @db.Uuid
+  level          Int // 0..3
+  stickerCrafts  Boolean   @default(false)
+  floatEditing   Boolean   @default(false)
+  customLoadouts Boolean   @default(true)
+  grantedById    String?   @db.Uuid
+  reason         String?
+  expiresAt      DateTime? // null = permanent
+  revokedAt      DateTime?
+  supersededAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  user      User  @relation("SkinPermissionTarget", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User? @relation("SkinPermissionGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("skin_permissions")
+}

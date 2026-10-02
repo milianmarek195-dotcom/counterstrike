@@ -1,0 +1,311 @@
+import { Injectable } from '@nestjs/common';
+import { Prisma, isUniqueViolation } from '@celtist/database';
+import {
+  checkLoadoutItem,
+  generateShareCode,
+  normalizeShareCode,
+  resolveLoadoutForApplication,
+  type InventoryItemInput,
+  type LoadoutExport,
+} from '@celtist/shared';
+import { randomBytes } from 'node:crypto';
+import { badRequest, conflict, notFound } from '../common/errors.js';
+import { PrismaService } from '../database/prisma.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { InventoryService, toRuleItem, toView } from './inventory.service.js';
+import { SkinPermissionsService } from './skin-permissions.service.js';
+import { SkinsService } from './skins.service.js';
+
+/** Hard product rule: three loadouts per player at most, whatever the setting says. */
+export const MAX_LOADOUTS = 3;
+
+const loadoutInclude = {
+  items: {
+    include: {
+      inventoryItem: {
+        include: {
+          skin: { select: { id: true, name: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true } },
+          stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
+        },
+      },
+    },
+    orderBy: { weaponDefIndex: 'asc' as const },
+  },
+} satisfies Prisma.LoadoutInclude;
+type LoadoutRow = Prisma.LoadoutGetPayload<{ include: typeof loadoutInclude }>;
+
+const view = (l: LoadoutRow, owner?: { displayName: string }) => ({
+  id: l.id,
+  name: l.name,
+  shareCode: l.shareCode,
+  visibility: l.visibility,
+  isActive: l.isActive,
+  createdAt: l.createdAt,
+  updatedAt: l.updatedAt,
+  ...(owner ? { owner: owner.displayName } : {}),
+  items: l.items.map((i) => ({ weaponDefIndex: i.weaponDefIndex, item: toView(i.inventoryItem) })),
+});
+
+@Injectable()
+export class LoadoutsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+    private readonly inventory: InventoryService,
+    private readonly skins: SkinsService,
+    private readonly permissions: SkinPermissionsService,
+  ) {}
+
+  async list(userId: string) {
+    const loadouts = await this.prisma.loadout.findMany({ where: { ownerId: userId }, include: loadoutInclude, orderBy: { createdAt: 'asc' } });
+    return { loadouts: loadouts.map((l) => view(l)), limit: await this.limit() };
+  }
+
+  async create(userId: string, name: string) {
+    const loadout = await this.createRow(userId, name);
+    return view(await this.load(userId, loadout.id));
+  }
+
+  async update(userId: string, id: string, patch: { name?: string; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC' }) {
+    await this.load(userId, id);
+    await this.prisma.loadout.update({ where: { id }, data: { ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}) } });
+    return view(await this.load(userId, id));
+  }
+
+  async remove(userId: string, id: string): Promise<void> {
+    await this.load(userId, id);
+    await this.prisma.loadout.delete({ where: { id } });
+  }
+
+  /** Copies a loadout (counts toward the limit of three). Items are shared references to the same inventory items. */
+  async duplicate(userId: string, id: string) {
+    const source = await this.load(userId, id);
+    const copy = await this.createRow(userId, `${source.name} copy`.slice(0, 40), false);
+    await this.prisma.loadoutItem.createMany({ data: source.items.map((i) => ({ loadoutId: copy.id, inventoryItemId: i.inventoryItemId, weaponDefIndex: i.weaponDefIndex })) });
+    return view(await this.load(userId, copy.id));
+  }
+
+  /** Chooses the inventory item for each weapon; replaces the previous selection. */
+  async setItems(userId: string, id: string, items: Array<{ inventoryItemId: string }>) {
+    await this.load(userId, id);
+    const ids = items.map((i) => i.inventoryItemId);
+    if (new Set(ids).size !== ids.length) throw badRequest('DUPLICATE_ITEM', 'An inventory item can only be used once per loadout');
+    const owned = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, ownerId: userId } });
+    if (owned.length !== ids.length) throw notFound('INVENTORY_ITEM_NOT_FOUND', 'One of the items is not in your inventory');
+    const weapons = owned.map((o) => o.weaponDefIndex);
+    if (new Set(weapons).size !== weapons.length) throw badRequest('DUPLICATE_WEAPON', 'A loadout holds one item per weapon');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.loadoutItem.deleteMany({ where: { loadoutId: id } });
+      await tx.loadoutItem.createMany({ data: owned.map((o) => ({ loadoutId: id, inventoryItemId: o.id, weaponDefIndex: o.weaponDefIndex })) });
+    });
+    return view(await this.load(userId, id));
+  }
+
+  /** The active loadout is the one a server applies; exactly one at most (database enforced). */
+  async activate(userId: string, id: string) {
+    await this.load(userId, id);
+    await this.prisma.$transaction([
+      this.prisma.loadout.updateMany({ where: { ownerId: userId, isActive: true }, data: { isActive: false } }),
+      this.prisma.loadout.update({ where: { id }, data: { isActive: true } }),
+    ]);
+    return view(await this.load(userId, id));
+  }
+
+  async regenerateCode(userId: string, id: string) {
+    await this.load(userId, id);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        await this.prisma.loadout.update({ where: { id }, data: { shareCode: generateShareCode((n) => randomBytes(n)) } });
+        return view(await this.load(userId, id));
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+    throw conflict('CODE_GENERATION_FAILED', 'Could not generate a unique share code, try again');
+  }
+
+  // ─────────────── sharing ───────────────
+
+  /** Read-only look at a shared loadout (private ones are invisible to everyone but the owner). */
+  async byCode(code: string, viewerId?: string) {
+    const normalised = normalizeShareCode(code);
+    if (!normalised) throw badRequest('INVALID_SHARE_CODE', 'That is not a valid share code');
+    const loadout = await this.prisma.loadout.findUnique({ where: { shareCode: normalised }, include: { ...loadoutInclude, owner: { select: { id: true, displayName: true } } } });
+    if (!loadout || (loadout.visibility === 'PRIVATE' && loadout.ownerId !== viewerId)) throw notFound('LOADOUT_NOT_FOUND', 'No loadout with that code');
+    return view(loadout, loadout.owner);
+  }
+
+  /** Imports a shared loadout: its items are copied into the importer's inventory and a new loadout is created. */
+  async importByCode(userId: string, code: string, name?: string) {
+    const normalised = normalizeShareCode(code);
+    if (!normalised) throw badRequest('INVALID_SHARE_CODE', 'That is not a valid share code');
+    const source = await this.prisma.loadout.findUnique({ where: { shareCode: normalised }, include: loadoutInclude });
+    if (!source || (source.visibility === 'PRIVATE' && source.ownerId !== userId)) throw notFound('LOADOUT_NOT_FOUND', 'No loadout with that code');
+
+    const inventoryMax = await this.settings.get('skin.maxInventoryItems');
+    const used = await this.prisma.inventoryItem.count({ where: { ownerId: userId } });
+    if (used + source.items.length > inventoryMax) throw conflict('INVENTORY_FULL', `Importing needs ${source.items.length} free inventory slots (you have ${inventoryMax - used})`);
+
+    const loadout = await this.createRow(userId, (name ?? source.name).slice(0, 40), false);
+    const restricted = await this.copyItems(userId, loadout.id, source.items.map((i) => i.inventoryItem as never));
+    return { loadout: view(await this.load(userId, loadout.id)), restricted };
+  }
+
+  /** Portable JSON (no database ids). */
+  async export(userId: string, id: string): Promise<LoadoutExport> {
+    const loadout = await this.load(userId, id);
+    return {
+      format: 'celtist-loadout',
+      version: 1,
+      name: loadout.name,
+      items: loadout.items.map(({ inventoryItem: i }) => ({
+        slot: i.slot,
+        weaponDefIndex: i.weaponDefIndex,
+        paintIndex: i.skin?.paintIndex ?? null,
+        floatValue: i.floatValue,
+        paintSeed: i.paintSeed,
+        statTrak: i.statTrak,
+        statTrakCount: i.statTrakCount,
+        souvenir: i.souvenir,
+        nameTag: i.nameTag,
+        stickers: i.stickers.map((s) => ({ stickerDefIndex: s.sticker.defIndex, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })),
+      })),
+    };
+  }
+
+  async importJson(userId: string, data: LoadoutExport) {
+    const inventoryMax = await this.settings.get('skin.maxInventoryItems');
+    const used = await this.prisma.inventoryItem.count({ where: { ownerId: userId } });
+    if (used + data.items.length > inventoryMax) throw conflict('INVENTORY_FULL', 'Not enough free inventory slots');
+    const loadout = await this.createRow(userId, data.name, false);
+
+    const skipped: Array<{ weaponDefIndex: number; reason: string }> = [];
+    const created: Array<{ id: string; weaponDefIndex: number }> = [];
+    for (const item of data.items) {
+      const skin = item.paintIndex === null ? null : await this.prisma.skin.findUnique({ where: { weaponDefIndex_paintIndex: { weaponDefIndex: item.weaponDefIndex, paintIndex: item.paintIndex } } });
+      if (item.paintIndex !== null && !skin) {
+        skipped.push({ weaponDefIndex: item.weaponDefIndex, reason: 'SKIN_NOT_IN_CATALOG' });
+        continue;
+      }
+      const stickers = await this.prisma.sticker.findMany({ where: { defIndex: { in: item.stickers.map((s) => s.stickerDefIndex) } } });
+      const byDef = new Map(stickers.map((s) => [s.defIndex, s.id] as const));
+      const row = await this.prisma.inventoryItem.create({
+        data: {
+          ownerId: userId,
+          slot: item.slot,
+          weaponDefIndex: item.weaponDefIndex,
+          skinId: skin?.id ?? null,
+          paintSeed: item.paintSeed,
+          floatValue: item.floatValue,
+          statTrak: item.statTrak,
+          statTrakCount: item.statTrakCount,
+          souvenir: item.souvenir,
+          nameTag: item.nameTag,
+          stickers: { create: item.stickers.filter((s) => byDef.has(s.stickerDefIndex)).map((s) => ({ stickerId: byDef.get(s.stickerDefIndex)!, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX ?? null, offsetY: s.offsetY ?? null, rotation: s.rotation ?? null, scale: s.scale ?? null })) },
+        },
+      });
+      created.push({ id: row.id, weaponDefIndex: row.weaponDefIndex });
+    }
+    const seen = new Set<number>();
+    const unique = created.filter((c) => (seen.has(c.weaponDefIndex) ? false : (seen.add(c.weaponDefIndex), true)));
+    await this.prisma.loadoutItem.createMany({ data: unique.map((c) => ({ loadoutId: loadout.id, inventoryItemId: c.id, weaponDefIndex: c.weaponDefIndex })) });
+    return { loadout: view(await this.load(userId, loadout.id)), skipped };
+  }
+
+  // ─────────────── what a game server applies ───────────────
+
+  /**
+   * The player's active loadout, filtered by their permission AT THIS MOMENT: an expired grant simply yields fewer (or no)
+   * items instead of an error, so a match is never disturbed by permission changes.
+   */
+  async resolveForServer(steamId: string) {
+    const user = await this.prisma.user.findUnique({ where: { steamId }, select: { id: true } });
+    if (!user) return { level: 0, items: [], skipped: [] };
+    const loadout = await this.prisma.loadout.findFirst({ where: { ownerId: user.id, isActive: true }, include: loadoutInclude });
+    const permission = await this.permissions.effectiveFor(user.id);
+    if (!loadout) return { level: permission.level, items: [], skipped: [] };
+
+    const rows = loadout.items.map((i) => i.inventoryItem);
+    const infos = await this.skins.infoFor(rows.flatMap((r) => (r.skinId ? [r.skinId] : [])));
+    const thresholds = await this.settings.get('skin.thresholds');
+    const applied = resolveLoadoutForApplication(rows.map((r) => toRuleItem(r as never)), { skins: infos, permission, thresholds });
+    const byWeapon = new Map(rows.map((r) => [r.weaponDefIndex, r] as const));
+    return {
+      level: permission.level,
+      items: applied.items.map((it) => {
+        const row = byWeapon.get(it.weaponDefIndex)!;
+        return {
+          weaponDefIndex: it.weaponDefIndex,
+          slot: it.slot,
+          paintIndex: row.skin?.paintIndex ?? 0,
+          pattern: it.paintSeed,
+          float: it.floatValue,
+          statTrak: it.statTrak,
+          statTrakCount: it.statTrakCount,
+          souvenir: it.souvenir,
+          nameTag: it.nameTag,
+          stickers: row.stickers.map((s) => ({ slot: s.slotIndex, defIndex: s.sticker.defIndex, wear: s.wear })),
+        };
+      }),
+      skipped: applied.skipped,
+    };
+  }
+
+  // ─────────────── internals ───────────────
+
+  private async limit(): Promise<number> {
+    return Math.min(MAX_LOADOUTS, await this.settings.get('skin.maxLoadoutsPerUser'));
+  }
+
+  private async createRow(userId: string, name: string, activateFirst = true) {
+    const limit = await this.limit();
+    const existing = await this.prisma.loadout.count({ where: { ownerId: userId } });
+    if (existing >= limit) throw conflict('LOADOUT_LIMIT_REACHED', `You can have at most ${limit} loadouts`);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        return await this.prisma.loadout.create({ data: { ownerId: userId, name, shareCode: generateShareCode((n) => randomBytes(n)), isActive: activateFirst && existing === 0 } });
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+        if (/ownerId/i.test(JSON.stringify((error as { meta?: unknown }).meta ?? ''))) throw conflict('LOADOUT_CONFLICT', 'Conflicting loadout state, try again');
+      }
+    }
+    throw conflict('CODE_GENERATION_FAILED', 'Could not generate a unique share code, try again');
+  }
+
+  private async load(userId: string, id: string): Promise<LoadoutRow> {
+    const loadout = await this.prisma.loadout.findFirst({ where: { id, ownerId: userId }, include: loadoutInclude });
+    if (!loadout) throw notFound('LOADOUT_NOT_FOUND', 'Loadout does not exist');
+    return loadout;
+  }
+
+  /** Copies someone else's inventory items into the importer's inventory; reports what the importer's level does not allow. */
+  private async copyItems(userId: string, loadoutId: string, sources: Array<Parameters<typeof toRuleItem>[0] & { skin: { id: string } | null }>) {
+    const permission = await this.permissions.effectiveFor(userId);
+    const infos = await this.skins.infoFor(sources.flatMap((s) => (s.skinId ? [s.skinId] : [])));
+    const thresholds = await this.settings.get('skin.thresholds');
+    const restricted: Array<{ weaponDefIndex: number; reasons: string[] }> = [];
+    for (const source of sources) {
+      const item = source as unknown as { stickers: Array<{ sticker: { id: string }; slotIndex: number; wear: number; offsetX: number | null; offsetY: number | null; rotation: number | null; scale: number | null }> };
+      const violations = checkLoadoutItem(toRuleItem(source), 0, { skins: infos, permission, thresholds });
+      if (violations.length > 0) restricted.push({ weaponDefIndex: source.weaponDefIndex, reasons: violations.map((v) => v.code) });
+      const row = await this.prisma.inventoryItem.create({
+        data: {
+          ownerId: userId,
+          slot: source.slot,
+          weaponDefIndex: source.weaponDefIndex,
+          skinId: source.skinId ?? null,
+          paintSeed: source.paintSeed,
+          floatValue: source.floatValue,
+          statTrak: source.statTrak,
+          statTrakCount: source.statTrakCount,
+          souvenir: source.souvenir,
+          nameTag: source.nameTag ?? null,
+          stickers: { create: item.stickers.map((s) => ({ stickerId: s.sticker.id, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })) },
+        },
+      });
+      await this.prisma.loadoutItem.create({ data: { loadoutId, inventoryItemId: row.id, weaponDefIndex: row.weaponDefIndex } });
+    }
+    return restricted;
+  }
+}

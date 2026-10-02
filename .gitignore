@@ -1,0 +1,30 @@
+# dependencies & build output
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+packages/database/src/generated/
+
+# secrets & local state
+.env
+.env.*
+!.env.example
+.local/
+uploads/
+*.pem
+*.key
+
+# .NET plugin
+plugins/**/bin/
+plugins/**/obj/
+*.user
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+npm-debug.log*

@@ -1,0 +1,18 @@
+# Production reverse proxy with automatic HTTPS. Set CELTIST_DOMAIN and CELTIST_API_DOMAIN in .env.
+{$CELTIST_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+{$CELTIST_API_DOMAIN} {
+	encode zstd gzip
+	# REST and the WebSocket (/realtime) share the upstream; Caddy upgrades connections automatically.
+	reverse_proxy api:4000 {
+		flush_interval -1
+	}
+}

@@ -1,0 +1,42 @@
+# Development services (database + cache). Run the apps on the host with `npm run dev:api` / `npm run dev:web`.
+#   docker compose up -d
+# Optional: also run the API in a container with `docker compose --profile app up -d --build`.
+name: celtist-dev
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: celtist
+      POSTGRES_PASSWORD: celtist_dev
+      POSTGRES_DB: celtist
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U celtist -d celtist"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    profiles: ["app"]
+    build: { context: ., dockerfile: docker/Dockerfile.api }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://celtist:celtist_dev@postgres:5432/celtist
+      REDIS_URL: redis://redis:6379
+    ports: ["4000:4000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+volumes:
+  pgdata:
+  redisdata:

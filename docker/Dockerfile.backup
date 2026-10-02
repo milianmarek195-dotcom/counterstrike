@@ -1,0 +1,7 @@
+FROM postgres:17-alpine
+RUN apk add --no-cache tini dcron
+COPY docker/backup/backup.sh /usr/local/bin/backup.sh
+COPY docker/backup/restore.sh /usr/local/bin/restore.sh
+COPY docker/backup/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/*.sh
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]

@@ -1,0 +1,80 @@
+# Production stack: Caddy (HTTPS) -> web + api, PostgreSQL, Redis, scheduled backups.
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# Only Caddy publishes ports. See docs/DEPLOYMENT.md.
+name: celtist
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      CELTIST_DOMAIN: ${CELTIST_DOMAIN:?set CELTIST_DOMAIN}
+      CELTIST_API_DOMAIN: ${CELTIST_API_DOMAIN:?set CELTIST_API_DOMAIN}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+  web:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL}
+        NEXT_PUBLIC_WS_URL: ${PUBLIC_API_URL}
+    depends_on: [api]
+  api:
+    restart: unless-stopped
+    build: { context: ., dockerfile: docker/Dockerfile.api }
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://celtist:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/celtist
+      REDIS_URL: redis://redis:6379
+      TRUST_PROXY: "1"
+      APP_ROLE: all
+      RUN_MIGRATIONS: "true"
+    volumes: [uploads:/data/uploads]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: celtist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: celtist
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U celtist -d celtist"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backup:
+    restart: unless-stopped
+    build: { context: ., dockerfile: docker/Dockerfile.backup }
+    environment:
+      DATABASE_URL: postgresql://celtist:${POSTGRES_PASSWORD}@postgres:5432/celtist
+      BACKUP_DAILY_RETENTION: ${BACKUP_DAILY_RETENTION:-7}
+      BACKUP_WEEKLY_RETENTION: ${BACKUP_WEEKLY_RETENTION:-4}
+    volumes: ["./backups:/backups"]
+    depends_on:
+      postgres: { condition: service_healthy }
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
+  redisdata:
+  uploads:
