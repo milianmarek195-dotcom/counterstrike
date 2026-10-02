@@ -24,7 +24,7 @@ public sealed partial class CeltistTournamentPlugin
 
     // ───────────── join authorisation: only assigned players get in ─────────────
 
-    private HookResult OnPlayerConnectFull(EventPlayerConnectFull e, GameEventInfo _)
+    private HookResult OnPlayerConnectFull(EventPlayerConnectFull e, GameEventInfo info)
     {
         var player = e.Userid;
         if (player is null || !player.IsValid || player.IsBot || _api is null) return HookResult.Continue;
@@ -65,14 +65,14 @@ public sealed partial class CeltistTournamentPlugin
         return HookResult.Continue;
     }
 
-    private HookResult OnPlayerDisconnect(EventPlayerDisconnect e, GameEventInfo _)
+    private HookResult OnPlayerDisconnect(EventPlayerDisconnect e, GameEventInfo info)
     {
         var player = e.Userid;
         if (player is { IsBot: false, IsValid: true }) Emit("player.disconnected", new() { ["steamId"] = player.SteamID.ToString() });
         return HookResult.Continue;
     }
 
-    private HookResult OnPlayerSpawn(EventPlayerSpawn e, GameEventInfo _)
+    private HookResult OnPlayerSpawn(EventPlayerSpawn e, GameEventInfo info)
     {
         // If a connected player ended up on the wrong side (manual team change), put them back.
         var player = e.Userid;
@@ -92,7 +92,7 @@ public sealed partial class CeltistTournamentPlugin
 
     // ───────────── scoring and results ─────────────
 
-    private HookResult OnRoundEnd(EventRoundEnd e, GameEventInfo _)
+    private HookResult OnRoundEnd(EventRoundEnd e, GameEventInfo info)
     {
         if (_plan is null || _map is null) return HookResult.Continue;
         var winnerTeam = (CsTeam)e.Winner;
@@ -116,7 +116,7 @@ public sealed partial class CeltistTournamentPlugin
         return Sides.SideOf("A", start, _map?.RoundsPlayed ?? 0, maxRounds) == side ? "A" : "B";
     }
 
-    private HookResult OnMatchEnd(EventCsWinPanelMatch e, GameEventInfo _)
+    private HookResult OnMatchEnd(EventCsWinPanelMatch e, GameEventInfo info)
     {
         if (_plan is null || _map is null || _map.ResultSent || _api is null) return HookResult.Continue;
         _map.ResultSent = true;
@@ -181,7 +181,7 @@ public sealed partial class CeltistTournamentPlugin
 
     // ───────────── team-damage penalties ─────────────
 
-    private HookResult OnPlayerHurt(EventPlayerHurt e, GameEventInfo _)
+    private HookResult OnPlayerHurt(EventPlayerHurt e, GameEventInfo info)
     {
         var attacker = e.Attacker; var victim = e.Userid;
         if (_plan is null || !_penaltiesEnabled || attacker is null || victim is null || attacker.Slot == victim.Slot || attacker.Team != victim.Team || attacker.IsBot) return HookResult.Continue;
@@ -191,7 +191,7 @@ public sealed partial class CeltistTournamentPlugin
         return HookResult.Continue;
     }
 
-    private HookResult OnPlayerDeath(EventPlayerDeath e, GameEventInfo _)
+    private HookResult OnPlayerDeath(EventPlayerDeath e, GameEventInfo info)
     {
         var attacker = e.Attacker; var victim = e.Userid;
         if (_plan is null || !_penaltiesEnabled || attacker is null || victim is null || attacker.Slot == victim.Slot || attacker.Team != victim.Team || attacker.IsBot) return HookResult.Continue;
