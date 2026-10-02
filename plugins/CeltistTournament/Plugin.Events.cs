@@ -83,7 +83,7 @@ public sealed partial class CeltistTournamentPlugin
         {
             var id = player.SteamID;
             if (!_loadouts.ContainsKey(id)) _ = ApplySkinsAsync(id);
-            AddTimer(0.3f, () => ApplyToHeldWeapons(id)); // weapons exist a moment after the spawn event
+            AddTimer(0.3f, () => { ApplyToHeldWeapons(id); ApplyGloves(id); }); // weapons and the player model exist a moment after the spawn event
         }
         return HookResult.Continue;
     }
