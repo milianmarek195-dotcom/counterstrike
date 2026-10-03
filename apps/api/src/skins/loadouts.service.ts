@@ -26,6 +26,7 @@ const loadoutInclude = {
         include: {
           skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true, modelPath: true, legacyModel: true } },
           stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
+          keychain: { select: { id: true, defIndex: true, name: true, imageUrl: true, rarity: true } },
         },
       },
     },
@@ -303,6 +304,7 @@ export class LoadoutsService {
           nameTag: it.nameTag,
           modelPath: row.skin?.modelPath ?? null,
           legacyModel: row.skin?.legacyModel ?? false,
+          keychain: row.keychain ? { defIndex: row.keychain.defIndex, seed: row.keychainSeed } : null,
           stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear })),
         });
       }
@@ -361,6 +363,8 @@ export class LoadoutsService {
           statTrakCount: source.statTrakCount,
           souvenir: source.souvenir,
           nameTag: source.nameTag ?? null,
+          keychainId: source.keychainId ?? null,
+          keychainSeed: source.keychainSeed ?? 0,
           stickers: { create: item.stickers.map((s) => ({ stickerId: s.sticker.id, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })) },
         },
       });

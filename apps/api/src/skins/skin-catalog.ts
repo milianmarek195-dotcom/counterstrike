@@ -34,10 +34,23 @@ export interface CatalogSticker {
   imageUrl: string | null;
 }
 
+export interface CatalogKeychain {
+  externalId: string;
+  defIndex: number;
+  name: string;
+  rarity: string | null;
+  collection: string | null;
+  imageUrl: string | null;
+}
+
 /** Where skin and sticker data come from (interface: tests and offline setups supply their own). */
 export abstract class SkinCatalogSource {
   abstract fetchSkins(): Promise<CatalogSkin[]>;
   abstract fetchStickers(): Promise<CatalogSticker[]>;
+  /** Weapon charms; sources that have none simply return an empty list. */
+  async fetchKeychains(): Promise<CatalogKeychain[]> {
+    return [];
+  }
 }
 
 /** A price observation for one market item name. */

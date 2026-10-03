@@ -47,6 +47,9 @@ export const inventoryItemInputSchema = z
     souvenir: z.boolean().default(false),
     nameTag: z.string().trim().max(NAME_TAG_MAX_LENGTH).nullish().transform((v) => (v ? v : null)),
     stickers: z.array(stickerPlacementSchema).max(STICKER_SLOT_COUNT).default([]),
+    /** Weapon charm; only on weapons (not knives, gloves or agents). */
+    keychainId: z.uuid().nullish().transform((v) => v ?? null),
+    keychainSeed: z.number().int().min(0).max(100_000).default(0),
   })
   .refine((v) => !(v.statTrak && v.souvenir), { message: 'An item cannot be StatTrak and Souvenir', path: ['souvenir'] })
   .refine((v) => new Set(v.stickers.map((s) => s.slotIndex)).size === v.stickers.length, { message: 'A sticker slot is used twice', path: ['stickers'] });
@@ -59,6 +62,12 @@ export const skinSearchQuerySchema = z.object({
   maxPrice: z.coerce.number().positive().optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(30),
+});
+
+export const keychainSearchQuerySchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(100),
 });
 
 export const stickerSearchQuerySchema = z.object({

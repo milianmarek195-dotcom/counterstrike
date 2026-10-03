@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AppConfig } from '../config/app-config.js';
 import { HTTP_FETCH, type HttpFetch } from '../steam/steam-openid.service.js';
-import { SkinCatalogSource, SkinPriceProvider, slotForWeapon, type CatalogSkin, type CatalogSticker } from './skin-catalog.js';
+import { SkinCatalogSource, SkinPriceProvider, slotForWeapon, type CatalogKeychain, type CatalogSkin, type CatalogSticker } from './skin-catalog.js';
 
 interface RawSkin {
   skin_id?: string;
@@ -136,6 +136,18 @@ export class CsgoApiCatalogSource extends SkinCatalogSource {
       });
     }
     return agents;
+  }
+
+  override async fetchKeychains(): Promise<CatalogKeychain[]> {
+    try {
+      const raw = await this.json<Array<{ id: string; name: string; def_index?: string | number; rarity?: { name?: string }; collections?: Array<{ name?: string }>; image?: string }>>(this.config.env.KEYCHAIN_CATALOG_URL);
+      return raw
+        .map((k) => ({ externalId: k.id, defIndex: Number(k.def_index), name: k.name.replace(/^Charm \| /, '').slice(0, 96), rarity: k.rarity?.name ?? null, collection: k.collections?.[0]?.name ?? null, imageUrl: httpsOrNull(k.image) }))
+        .filter((k) => Number.isInteger(k.defIndex) && k.defIndex > 0);
+    } catch (error) {
+      this.logger.warn(`Charm catalog failed: ${(error as Error).message}`);
+      return [];
+    }
   }
 
   override async fetchStickers(): Promise<CatalogSticker[]> {

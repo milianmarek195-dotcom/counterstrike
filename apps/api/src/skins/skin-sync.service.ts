@@ -73,7 +73,15 @@ export class SkinSyncService {
         ),
       );
     }
-    this.logger.log(`Catalog synced: ${skins.length} skins, ${stickers.length} stickers`);
+    const keychains = await this.catalog.fetchKeychains();
+    for (const k of keychains) {
+      await this.prisma.keychain.upsert({
+        where: { defIndex: k.defIndex },
+        create: { externalId: k.externalId, defIndex: k.defIndex, name: k.name, rarity: k.rarity, collection: k.collection, imageUrl: k.imageUrl },
+        update: { externalId: k.externalId, name: k.name, rarity: k.rarity, collection: k.collection, imageUrl: k.imageUrl, active: true },
+      });
+    }
+    this.logger.log(`Catalog synced: ${skins.length} skins, ${stickers.length} stickers, ${keychains.length} charms`);
     return { skins: skins.length, stickers: stickers.length };
   }
 

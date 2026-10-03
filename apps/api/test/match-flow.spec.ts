@@ -293,10 +293,10 @@ describe('match control (no ready check, flexible teams, party leader = admin)',
     it('lets the controller decide the veto for either team, or skip it', async () => {
       await control(leader, 'start-veto').expect(204);
       const v = (await as(t, null).get(`/v1/matches/${matchId}/veto`)).body;
-      // a non-captain team member cannot act, the leader can act for the team on turn
+      // a non-captain team member cannot act; an admin without a team may decide for the team on turn (a playing leader only for their own team)
       const memberOnTurn = v.current.team === 'A' ? players[1]! : players[3]!;
       await as(t, memberOnTurn).post(`/v1/matches/${matchId}/veto`, { action: 'BAN', mapId: v.remaining[0].id }).expect(403);
-      await as(t, leader).post(`/v1/matches/${matchId}/veto`, { action: 'BAN', mapId: v.remaining[0].id }).expect(201);
+      await as(t, admin).post(`/v1/matches/${matchId}/veto`, { action: 'BAN', mapId: v.remaining[0].id }).expect(201);
 
       await control(leader, 'skip-veto').expect(204);
       expect(await status()).toBe('CONFIGURING');

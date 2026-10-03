@@ -1236,9 +1236,12 @@ model InventoryItem {
   statTrakCount  Int         @default(0)
   souvenir       Boolean     @default(false)
   nameTag        String?     @db.VarChar(20)
+  keychainId     String?     @db.Uuid // charm hanging on the weapon
+  keychainSeed   Int         @default(0)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
+  keychain     Keychain?              @relation(fields: [keychainId], references: [id], onDelete: SetNull)
   owner        User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   skin         Skin?                  @relation(fields: [skinId], references: [id], onDelete: SetNull)
   stickers     InventoryItemSticker[]
@@ -1247,6 +1250,23 @@ model InventoryItem {
   @@index([ownerId, weaponDefIndex])
   @@index([skinId])
   @@map("inventory_items")
+}
+
+/// Weapon charms (keychains) from the catalog.
+model Keychain {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  externalId String?  @unique @db.VarChar(64)
+  defIndex   Int      @unique
+  name       String   @db.VarChar(96)
+  rarity     String?  @db.VarChar(48)
+  collection String?  @db.VarChar(96)
+  imageUrl   String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  items InventoryItem[]
+
+  @@map("keychains")
 }
 
 model InventoryItemSticker {

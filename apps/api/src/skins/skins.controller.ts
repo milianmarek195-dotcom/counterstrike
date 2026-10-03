@@ -7,6 +7,7 @@ import {
   importLoadoutCodeSchema,
   importLoadoutJsonSchema,
   inventoryItemInputSchema,
+  keychainSearchQuerySchema,
   paintSeedSchema,
   floatSchema,
   setLoadoutItemsSchema,
@@ -62,6 +63,12 @@ export class SkinsController {
   @Public()
   detail(@Param('id', { schema: idParam }) id: string) {
     return this.skins.detail(id);
+  }
+
+  @Get('keychains')
+  @Public()
+  keychains(@Query({ schema: keychainSearchQuerySchema }) query: z.infer<typeof keychainSearchQuerySchema>) {
+    return this.skins.searchKeychains(query);
   }
 
   @Get('stickers')

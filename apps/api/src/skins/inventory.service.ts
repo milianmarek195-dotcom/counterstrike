@@ -18,6 +18,7 @@ import { SkinsService } from './skins.service.js';
 const itemInclude = {
   skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true } },
   stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
+  keychain: { select: { id: true, defIndex: true, name: true, imageUrl: true, rarity: true } },
 } satisfies Prisma.InventoryItemInclude;
 
 export type InventoryItemRow = Prisma.InventoryItemGetPayload<{ include: typeof itemInclude }>;
@@ -100,6 +101,10 @@ export class InventoryService {
     const stickerIds = input.stickers.map((s) => s.stickerId);
     if (stickerIds.length > 0 && (await this.prisma.sticker.count({ where: { id: { in: stickerIds } } })) !== new Set(stickerIds).size) throw badRequest('UNKNOWN_STICKER', 'A sticker does not exist');
     if (input.skinId && !infos.has(input.skinId)) throw notFound('SKIN_NOT_FOUND', 'Skin does not exist');
+    if (input.keychainId) {
+      if (['KNIFE', 'GLOVES', 'AGENT'].includes(input.slot)) throw badRequest('CHARM_NOT_ALLOWED', 'Charms can only be attached to weapons');
+      if (!(await this.prisma.keychain.findUnique({ where: { id: input.keychainId }, select: { id: true } }))) throw notFound('CHARM_NOT_FOUND', 'Charm does not exist');
+    }
     if (!input.skinId) await this.assertKnownWeapon(input.weaponDefIndex, input.slot);
 
     const thresholds = await this.settings.get('skin.thresholds');
@@ -128,6 +133,8 @@ export class InventoryService {
       statTrakCount: input.statTrakCount,
       souvenir: input.souvenir,
       nameTag: input.nameTag ?? null,
+      keychainId: input.keychainId ?? null,
+      keychainSeed: input.keychainSeed ?? 0,
       stickers: { create: input.stickers.map((s) => ({ stickerId: s.stickerId, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX ?? null, offsetY: s.offsetY ?? null, rotation: s.rotation ?? null, scale: s.scale ?? null })) },
     };
   }
@@ -144,6 +151,7 @@ export function toRuleItem(input: InventoryItemInput | InventoryItemRow): Loadou
     statTrakCount: input.statTrakCount,
     souvenir: input.souvenir,
     nameTag: input.nameTag ?? null,
+    keychainId: input.keychainId ?? null,
     stickers: input.stickers.map((s) => ({ slotIndex: s.slotIndex, stickerId: 'stickerId' in s ? s.stickerId : (s as { sticker: { id: string } }).sticker.id, wear: s.wear })),
   };
 }
@@ -160,6 +168,8 @@ export function toView(item: InventoryItemRow) {
     statTrakCount: item.statTrakCount,
     souvenir: item.souvenir,
     nameTag: item.nameTag,
+    keychain: item.keychain,
+    keychainSeed: item.keychainSeed,
     stickers: item.stickers.map((s) => ({ slotIndex: s.slotIndex, wear: s.wear, sticker: s.sticker, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

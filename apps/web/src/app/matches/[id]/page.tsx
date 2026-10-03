@@ -16,7 +16,7 @@ interface MatchView {
   server: { name: string; address: string; connect: string } | null;
   viewer: { canControl: boolean; role: string | null; slot: 'A' | 'B' | null } | null;
 }
-interface Veto { complete: boolean; startsWith: 'A' | 'B'; deadline?: string | null; current: { stepIndex: number; team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string }>; steps: Array<{ index: number; action: string; team: string | null }>; actions: Array<{ team: string; action: string; map: { id?: string; name: string } | null; side: string | null }> }
+interface Veto { complete: boolean; startsWith: 'A' | 'B'; deadline?: string | null; current: { stepIndex: number; team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string; imageUrl?: string | null }>; steps: Array<{ index: number; action: string; team: string | null }>; actions: Array<{ team: string; action: string; map: { id?: string; name: string; imageUrl?: string | null } | null; side: string | null }> }
 interface Row { steamId: string; displayName: string; team: string; kills: number; deaths: number; assists: number; kd: number; adr: number; hsPercent: number; mvps: number; killsAwp: number; killsAk47: number; killsPistol: number }
 
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
@@ -95,22 +95,23 @@ function VetoPanel({ matchId, veto, match, reload }: { matchId: string; veto: Ve
   const act = useAction(reload);
   const cur = veto.current;
   const left = useSecondsLeft(veto.deadline ?? null);
-  const mine = !!cur && (match.viewer?.slot === cur.team || !!match.viewer?.canControl);
+  // whoever plays in the match decides for their own team only; admins without a team may decide for the team on turn
+  const mine = !!cur && (match.viewer?.slot ? match.viewer.slot === cur.team : !!match.viewer?.canControl);
   const teamName = (slot: string | null) => (slot === 'A' || slot === 'B' ? match.teams[slot].name : '–');
   const verb: Record<string, string> = { BAN: 'bannt', PICK: 'pickt', SIDE: 'wählt die Seite', DECIDER: 'Decider' };
   const stepText: Record<string, string> = { BAN: 'Ban', PICK: 'Pick', SIDE: 'Seite', DECIDER: 'Decider' };
 
   // all maps of the pool: still available + already used by a step
-  const used = new Map<string, { team: string | null; action: string; side: string | null; name: string }>();
+  const used = new Map<string, { team: string | null; action: string; side: string | null; name: string; imageUrl?: string | null }>();
   for (const x of veto.actions) {
     if (!x.map || !x.map.id) continue;
     const prev = used.get(x.map.id);
     if (x.action === 'SIDE') { if (prev) prev.side = x.side; continue; }
-    used.set(x.map.id, { team: x.team, action: x.action, side: x.side, name: x.map.name });
+    used.set(x.map.id, { team: x.team, action: x.action, side: x.side, name: x.map.name, imageUrl: x.map.imageUrl });
   }
   const cards = [
-    ...veto.remaining.map((r) => ({ id: r.id, name: r.name, state: null as null | { team: string | null; action: string; side: string | null } })),
-    ...[...used.entries()].map(([id, u]) => ({ id, name: u.name, state: u })),
+    ...veto.remaining.map((r) => ({ id: r.id, name: r.name, imageUrl: r.imageUrl ?? null, state: null as null | { team: string | null; action: string; side: string | null } })),
+    ...[...used.entries()].map(([id, u]) => ({ id, name: u.name, imageUrl: u.imageUrl ?? null, state: u })),
   ];
   const choosing = mine && !!cur && cur.action !== 'SIDE';
 
@@ -149,7 +150,8 @@ function VetoPanel({ matchId, veto, match, reload }: { matchId: string; veto: Ve
           const clickable = choosing && !st && !act.busy;
           return (
             <button key={c.id} disabled={!clickable} onClick={() => cur && void act.run(() => api(`/matches/${matchId}/veto`, { method: 'POST', body: { action: cur.action, mapId: c.id } }))}
-              className={`stripes relative flex h-24 flex-col justify-end overflow-hidden rounded-lg border p-3 text-left transition ${picked ? 'border-primary ring-2 ring-primary' : ''} ${banned ? 'opacity-45 grayscale' : ''} ${clickable ? 'cursor-pointer hover:border-primary hover:brightness-125' : 'cursor-default'}`}>
+              style={c.imageUrl ? { backgroundImage: `linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.15)), url(${c.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+              className={`${c.imageUrl ? '' : 'stripes'} relative flex h-28 flex-col justify-end overflow-hidden rounded-lg border p-3 text-left transition ${picked ? 'border-primary ring-2 ring-primary' : ''} ${banned ? 'opacity-45 grayscale' : ''} ${clickable ? 'cursor-pointer hover:border-primary hover:brightness-125' : 'cursor-default'}`}>
               <span className={`font-display text-xl font-bold uppercase leading-none ${banned ? 'line-through' : ''}`}>{c.name}</span>
               <span className="mt-1 text-[11px] uppercase tracking-wide text-muted">
                 {!st ? (clickable ? (cur?.action === 'BAN' ? 'Klicken zum Bannen' : 'Klicken zum Picken') : 'Verfügbar') : banned ? `Ban · ${teamName(st.team)}` : st.action === 'DECIDER' ? `Decider${st.side ? ' · ' + st.side : ''}` : `Pick · ${teamName(st.team)}${st.side ? ' · Gegner: ' + st.side : ''}`}

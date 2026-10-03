@@ -12,6 +12,7 @@ type Team = 'BOTH' | Side;
 interface Weapon { weaponDefIndex: number; weaponName: string; slot: string; skins: number }
 interface Skin { id: string; name: string; phase: string | null; weaponName: string; weaponDefIndex: number; slot: string; paintIndex: number; rarity: string | null; imageUrl: string | null; minFloat: number; maxFloat: number; statTrakAvailable: boolean; souvenirAvailable: boolean; priceMaxUsd: number | null; requiredLevel: number; side?: string | null }
 interface Sticker { id: string; name: string; imageUrl: string | null }
+interface Charm { id: string; name: string; rarity: string | null; imageUrl: string | null }
 interface ItemSkin { name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
 interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null }
 interface LoadoutEntry { weaponDefIndex: number; team: Team; item: Item }
@@ -291,6 +292,9 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<'SIDE' | 'BOTH'>('SIDE');
   const isAgent = skin.slot === 'AGENT';
+  const [charm, setCharm] = useState<Charm | null>(null);
+  const [charmSeed, setCharmSeed] = useState('0');
+  const charms = useApi<{ keychains: Charm[] }>(!isAgent && skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' ? '/keychains?pageSize=100' : null);
   const found = useApi<{ stickers: Sticker[] }>(pickSlot !== null && q.length >= 2 ? `/stickers?q=${encodeURIComponent(q)}&pageSize=12` : null);
   const detail = useApi<{ prices: PriceEntry[] }>(`/skins/${skin.id}`);
   const act = useAction();
@@ -309,6 +313,7 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
       body: {
         slot: skin.slot, weaponDefIndex: skin.weaponDefIndex, skinId: skin.id, floatValue: usedFloat, paintSeed: Number(pattern),
         statTrak: statTrak && skin.statTrakAvailable, nameTag: nameTag || null,
+        keychainId: charm?.id ?? null, keychainSeed: Number(charmSeed) || 0,
         stickers: stickers.flatMap((s, i) => (s ? [{ stickerId: s.sticker.id, slotIndex: i, wear: s.wear, rotation: s.rotation, scale: s.scale }] : [])),
       },
     });
@@ -375,6 +380,20 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
               {access && !access.stickerCrafts && <p className="text-xs text-muted">Hinweis: Sticker-Crafts sind für dich nicht freigeschaltet; die Prüfung erfolgt beim Speichern.</p>}
             </div>
           )}
+        </div>
+      )}
+
+      {charms.data && charms.data.keychains.length > 0 && (
+        <div>
+          <div className="mb-1 flex items-center justify-between text-sm"><span className="text-muted">Charm</span>{charm && <button type="button" className="text-xs text-danger" onClick={() => setCharm(null)}>entfernen</button>}</div>
+          <div className="grid max-h-32 grid-cols-4 gap-1.5 overflow-y-auto">
+            {charms.data.keychains.map((c) => (
+              <button key={c.id} type="button" title={c.name} aria-pressed={charm?.id === c.id} onClick={() => setCharm(c)} className={cn('flex h-14 items-center justify-center rounded-md border bg-card p-1', charm?.id === c.id && 'ring-2 ring-primary')}>
+                {c.imageUrl ? <img src={img(c.imageUrl, '96fx72f')} alt={c.name} loading="lazy" referrerPolicy="no-referrer" className="max-h-full object-contain" /> : <span className="text-[10px]">{c.name}</span>}
+              </button>
+            ))}
+          </div>
+          {charm && <div className="mt-1 flex items-end gap-2"><span className="flex-1 truncate text-xs text-muted">{charm.name}</span><div className="w-28"><Input label="Charm-Muster" inputMode="numeric" value={charmSeed} onChange={(e) => setCharmSeed(e.target.value.replace(/[^\d]/g, '').slice(0, 5))} /></div></div>}
         </div>
       )}
 

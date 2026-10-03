@@ -96,6 +96,15 @@ export class SkinsService {
     return { total, page: query.page, pageSize: query.pageSize, stickers: rows };
   }
 
+  async searchKeychains(query: { q?: string; page: number; pageSize: number }) {
+    const where: Prisma.KeychainWhereInput = { active: true, ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}) };
+    const [total, rows] = await Promise.all([
+      this.prisma.keychain.count({ where }),
+      this.prisma.keychain.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+    ]);
+    return { total, page: query.page, pageSize: query.pageSize, keychains: rows };
+  }
+
   /** Skins as the pure rules in packages/shared need them (with price table). */
   async infoFor(ids: readonly string[]): Promise<Map<string, SkinInfo>> {
     const rows = await this.prisma.skin.findMany({ where: { id: { in: [...new Set(ids)] } }, include: { prices: true } });

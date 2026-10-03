@@ -10,7 +10,7 @@ namespace Celtist.Tournament;
 
 public sealed partial class CeltistTournamentPlugin
 {
-    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null, bool Legacy = false);
+    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null, bool Legacy = false, List<(int Slot, int Def, float Wear)>? Stickers = null, int KeychainDef = 0, int KeychainSeed = 0);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
@@ -62,11 +62,46 @@ public sealed partial class CeltistTournamentPlugin
                     (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(),
                     i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null,
                     i.TryGetProperty("modelPath", out var mp) && mp.ValueKind == JsonValueKind.String ? mp.GetString() : null,
-                    i.TryGetProperty("legacyModel", out var lg) && lg.ValueKind == JsonValueKind.True));
+                    i.TryGetProperty("legacyModel", out var lg) && lg.ValueKind == JsonValueKind.True,
+                    ParseStickers(i), i.TryGetProperty("keychain", out var kc) && kc.ValueKind == JsonValueKind.Object ? kc.GetProperty("defIndex").GetInt32() : 0,
+                    i.TryGetProperty("keychain", out var kc2) && kc2.ValueKind == JsonValueKind.Object ? kc2.GetProperty("seed").GetInt32() : 0));
             if (items.Count == 0) return;
             Server.NextFrame(() => { _loadouts[steamId] = items; ApplyToHeldWeapons(steamId); ApplyGloves(steamId); });
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] skin load failed for {Steam}: {Message}", steamId, e.Message); }
+    }
+
+    private static List<(int Slot, int Def, float Wear)> ParseStickers(JsonElement item)
+    {
+        var list = new List<(int, int, float)>();
+        if (item.TryGetProperty("stickers", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            foreach (var s in arr.EnumerateArray())
+                list.Add((s.GetProperty("slot").GetInt32(), s.GetProperty("defIndex").GetInt32(), (float)s.GetProperty("wear").GetDouble()));
+        return list;
+    }
+
+    /// <summary>
+    /// A weapon the game created for the player carries the stickers and charm of the player's real Steam item. The loadout
+    /// decides what is on the weapon, so everything is removed first and only the loadout's own stickers and charm are set.
+    /// </summary>
+    private void ApplyExtras(CEconItemView econ, SkinItem item)
+    {
+        econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
+        econ.AttributeList.Attributes.RemoveAll();
+        if (!EnsureAttributeSetter()) return;
+        foreach (var handle in new[] { econ.NetworkedDynamicAttributes.Handle, econ.AttributeList.Handle })
+        {
+            foreach (var (slot, def, wear) in item.Stickers ?? new())
+            {
+                _setAttribute!.Invoke(handle, $"sticker slot {slot} id", BitConverter.UInt32BitsToSingle((uint)def));
+                _setAttribute.Invoke(handle, $"sticker slot {slot} wear", wear);
+            }
+            if (item.KeychainDef > 0)
+            {
+                _setAttribute!.Invoke(handle, "keychain slot 0 id", BitConverter.UInt32BitsToSingle((uint)item.KeychainDef));
+                _setAttribute.Invoke(handle, "keychain slot 0 seed", BitConverter.UInt32BitsToSingle((uint)item.KeychainSeed));
+            }
+        }
     }
 
     private void ApplyToHeldWeapons(ulong steamId)
@@ -217,6 +252,7 @@ public sealed partial class CeltistTournamentPlugin
             weapon.FallbackSeed = item.Pattern;
             weapon.FallbackWear = item.Float;
             weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
+            ApplyExtras(econ, item);
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
             SetMeshMask(weapon, item.Legacy);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);

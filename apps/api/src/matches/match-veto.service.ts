@@ -58,6 +58,11 @@ export class MatchVetoService {
     const step = currentStep(loaded.state);
     if (!step || step.team === null) throw conflict('VETO_NOT_ACTIVE', 'There is nothing to decide right now');
 
+    if (asController) {
+      // a controller who plays in the match acts for their own team only; without a team (admin) they may decide for either
+      const own = await this.prisma.matchPlayer.findUnique({ where: { matchId_userId: { matchId, userId } }, include: { matchTeam: { select: { slot: true } } } });
+      if (own && !own.removedAt && own.matchTeam && own.matchTeam.slot !== step.team) throw forbidden(`It is team ${step.team}'s turn`, 'NOT_YOUR_TURN');
+    }
     if (!asController) {
       const player = await this.prisma.matchPlayer.findUnique({ where: { matchId_userId: { matchId, userId } }, include: { matchTeam: { select: { slot: true } } } });
       if (!player || player.removedAt || !player.matchTeam) throw notFound('NOT_IN_MATCH', 'You are not part of this match');
@@ -112,7 +117,7 @@ export class MatchVetoService {
       deadline: loaded.deadline,
       complete: isVetoComplete(loaded.state),
       current: step ? { stepIndex: step.index, action: step.action, team: step.team } : null,
-      remaining: remainingMaps(loaded.state).map((id) => ({ id, name: byId.get(id)?.name ?? id, key: byId.get(id)?.key ?? '' })),
+      remaining: remainingMaps(loaded.state).map((id) => ({ id, name: byId.get(id)?.name ?? id, key: byId.get(id)?.key ?? '', imageUrl: byId.get(id)?.imageUrl ?? null })),
       steps: loaded.state.steps.map((s, index) => ({ index, action: s.action, team: s.team === undefined ? null : s.team === 'A' ? loaded.state.startsWith : otherOf(loaded.state.startsWith) })),
       actions: loaded.state.records.map((r) => ({
         stepIndex: r.stepIndex,
@@ -120,7 +125,7 @@ export class MatchVetoService {
         action: r.action,
         side: r.side,
         auto: r.auto,
-        map: byId.get(r.mapId) ? { id: r.mapId, name: byId.get(r.mapId)!.name, key: byId.get(r.mapId)!.key } : null,
+        map: byId.get(r.mapId) ? { id: r.mapId, name: byId.get(r.mapId)!.name, key: byId.get(r.mapId)!.key, imageUrl: byId.get(r.mapId)!.imageUrl ?? null } : null,
       })),
     };
   }

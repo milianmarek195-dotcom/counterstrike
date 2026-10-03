@@ -34,6 +34,7 @@ public sealed partial class CeltistTournamentPlugin
                 // after a plugin restart the match is already running: keep its map and warmup/round state untouched
                 ConfigureServer(plan, startWarmup: !_recoveringMatch);
                 if (plan.Maps.Count > 0 && !(_recoveringMatch && Server.MapName == plan.Maps[0].Key)) ChangeMap(plan.Maps[0]);
+                if (_recoveringMatch) ResumeRunningMap(plan);
                 Emit("match.configured");
                 return (true, null);
             }
@@ -109,6 +110,30 @@ public sealed partial class CeltistTournamentPlugin
     }
 
     private bool _recoveringMatch;
+
+    /// <summary>
+    /// After a plugin restart in the middle of a map the counting has to continue: the map progress is rebuilt from the
+    /// game's own team scores (kills of the minutes before the restart are lost, everything from now on counts again).
+    /// </summary>
+    private void ResumeRunningMap(MatchPlan plan)
+    {
+        try
+        {
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            if (rules is null || rules.WarmupPeriod) return;
+            var mapPlan = plan.Maps.FirstOrDefault(m => m.Key == Server.MapName) ?? plan.Maps.FirstOrDefault();
+            _map = new MapProgress { MapNumber = mapPlan?.MapNumber ?? 1 };
+            foreach (var team in Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager"))
+            {
+                var t = (CsTeam)team.TeamNum;
+                if (t is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
+                var slot = SlotPlayingSide(t);
+                if (slot == "A") _map.ScoreA = team.Score; else if (slot == "B") _map.ScoreB = team.Score;
+            }
+            Logger.LogInformation("[Celtist] resumed map {Map}: {A}:{B}", _map.MapNumber, _map.ScoreA, _map.ScoreB);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] could not resume the running map: {Message}", e.Message); }
+    }
 
     private void ConfigureServer(MatchPlan plan, bool startWarmup = true)
     {

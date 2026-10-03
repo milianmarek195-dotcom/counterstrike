@@ -211,6 +211,8 @@ export interface LoadoutItemInput {
   souvenir: boolean;
   nameTag: string | null;
   stickers: readonly LoadoutStickerInput[];
+  /** Charm on the weapon (needs at least skin level 1). */
+  keychainId?: string | null;
 }
 
 export type LoadoutViolationCode =
@@ -262,6 +264,7 @@ export function checkLoadoutItem(
   if (!Number.isInteger(item.paintSeed) || item.paintSeed < PAINT_SEED_MIN || item.paintSeed > PAINT_SEED_MAX) {
     add('PAINT_SEED_OUT_OF_RANGE', `Paint seed must be an integer between ${PAINT_SEED_MIN} and ${PAINT_SEED_MAX}`);
   }
+  if (item.keychainId && permission.level < 1) add('SKIN_LEVEL_TOO_LOW', 'Charms need at least skin level 1');
   if (item.statTrak && item.souvenir) add('VARIANT_CONFLICT', 'An item cannot be both StatTrak and Souvenir');
   if (item.nameTag !== null && item.nameTag.length > NAME_TAG_MAX_LENGTH) {
     add('NAME_TAG_TOO_LONG', `Name tags are limited to ${NAME_TAG_MAX_LENGTH} characters`);
