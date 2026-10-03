@@ -29,5 +29,7 @@ public sealed class PluginConfig : BasePluginConfig
     /// <summary>Skin module. Off by default: enable only after testing on your server build (see docs/SKIN_SYSTEM.md).</summary>
     /// <summary>Agent (player model) switching. Players still have to opt in with !agent.</summary>
     [JsonPropertyName("AgentsEnabled")] public bool AgentsEnabled { get; set; } = true;
+    /// <summary>SteamID64s that may fly with !noclip (only while no match map is running).</summary>
+    [JsonPropertyName("NoclipSteamIds")] public List<string> NoclipSteamIds { get; set; } = new();
     [JsonPropertyName("SkinsEnabled")] public bool SkinsEnabled { get; set; } = false;
 }

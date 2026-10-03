@@ -176,8 +176,24 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_noclip", "Fly through walls (listed players, outside of a running match)", OnNoclipCommand);
         AddCommand("css_agent", "Toggle your agent (player model) from your loadout", OnAgentCommand);
         AddCommand("css_skch", "Admins: !skch <level 0-3> <player|all> [minutes]", OnSkch);
+    }
+
+    private void OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || !player.PawnIsAlive) return;
+        if (!Config.NoclipSteamIds.Contains(player.SteamID.ToString())) { player.PrintToChat(" You are not allowed to use noclip."); return; }
+        if (_map is not null) { player.PrintToChat(" No noclip while a match map is running."); return; }
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid) return;
+        var on = pawn.MoveType != MoveType_t.MOVETYPE_NOCLIP;
+        var type = on ? MoveType_t.MOVETYPE_NOCLIP : MoveType_t.MOVETYPE_WALK;
+        pawn.MoveType = type;
+        Schema.SetSchemaValue(pawn.Handle, "CBaseEntity", "m_nActualMoveType", type);
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+        player.PrintToChat($" [Celtist] Noclip {(on ? "on" : "off")}.");
     }
 
     private bool IsAdmin(CCSPlayerController? p) => p is null || (_plan?.Admins.Contains(p.SteamID) ?? false);
