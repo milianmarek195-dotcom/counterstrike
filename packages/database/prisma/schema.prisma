@@ -1238,6 +1238,9 @@ model InventoryItem {
   nameTag        String?     @db.VarChar(20)
   keychainId     String?     @db.Uuid // charm hanging on the weapon
   keychainSeed   Int         @default(0)
+  keychainOffsetX Float      @default(0)
+  keychainOffsetY Float      @default(0)
+  keychainOffsetZ Float      @default(0)
   favorite       Boolean     @default(false) // starred: shown first and offered for one-click equipping
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt

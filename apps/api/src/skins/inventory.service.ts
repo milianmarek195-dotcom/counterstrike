@@ -142,6 +142,9 @@ export class InventoryService {
       nameTag: input.nameTag ?? null,
       keychainId: input.keychainId ?? null,
       keychainSeed: input.keychainSeed ?? 0,
+      keychainOffsetX: input.keychainOffsetX ?? 0,
+      keychainOffsetY: input.keychainOffsetY ?? 0,
+      keychainOffsetZ: input.keychainOffsetZ ?? 0,
       stickers: { create: input.stickers.map((s) => ({ stickerId: s.stickerId, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX ?? null, offsetY: s.offsetY ?? null, rotation: s.rotation ?? null, scale: s.scale ?? null })) },
     };
   }
@@ -177,6 +180,9 @@ export function toView(item: InventoryItemRow) {
     nameTag: item.nameTag,
     keychain: item.keychain,
     keychainSeed: item.keychainSeed,
+    keychainOffsetX: item.keychainOffsetX,
+    keychainOffsetY: item.keychainOffsetY,
+    keychainOffsetZ: item.keychainOffsetZ,
     favorite: item.favorite,
     stickers: item.stickers.map((s) => ({ slotIndex: s.slotIndex, wear: s.wear, sticker: s.sticker, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })),
     createdAt: item.createdAt,

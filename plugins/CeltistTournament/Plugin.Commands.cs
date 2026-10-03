@@ -180,8 +180,6 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_ct", "Switch yourself to the CT side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.CounterTerrorist));
         AddCommand("css_t", "Switch yourself to the T side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.Terrorist));
         AddCommand("css_test", "Test mode for listed players: endless warmup, endless money, buy anywhere", OnTestCommand);
-        AddCommand("css_skindbg", "Debug: !skindbg clear|paint|mesh|extras switches one part of the weapon skin on or off", OnSkinDebugCommand);
-        AddCommand("css_mesh", "Debug: flip the weapon model of the weapon in your hand and report the skin data", OnMeshCommand);
         AddCommand("css_noclip", "Fly through walls (listed players, outside of a running match)", OnNoclipCommand);
         AddCommand("css_agent", "Toggle your agent (player model) from your loadout", OnAgentCommand);
         AddCommand("css_skch", "Admins: !skch <level 0-3> <player|all> [minutes]", OnSkch);
@@ -248,52 +246,6 @@ public sealed partial class CeltistTournamentPlugin
             money.Account = 65535;
             Utilities.SetStateChanged(p, "CCSPlayerController", "m_pInGameMoneyServices");
         }
-    }
-
-    private void OnSkinDebugCommand(CCSPlayerController? player, CommandInfo info)
-    {
-        if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
-        switch (info.ArgString.Trim().ToLowerInvariant())
-        {
-            case "clear": _dbgClear = !_dbgClear; break;
-            case "paint": _dbgPaint = !_dbgPaint; break;
-            case "mesh": _dbgMesh = !_dbgMesh; break;
-            case "extras": _dbgExtras = !_dbgExtras; break;
-            case "vm": _dbgViewModel = !_dbgViewModel; break;
-            case "redeploy": _dbgRedeploy = !_dbgRedeploy; _redeployed.Remove(player.SteamID); break;
-            case "v1": SetVariant(true, true, true, false, true); break;   // everything on (the default)
-            case "v2": SetVariant(true, true, true, true, true); break;    // + unique item id
-            case "v3": SetVariant(true, true, true, true, false); break;   // unique item id, attributes only (like knives)
-            case "v4": SetVariant(false, false, false, false, true); break; // shared id + fallback fields only (the first version)
-            case "v5": SetVariant(false, false, false, true, true); break;  // unique id + fallback fields only
-            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; _dbgViewModel = false; _dbgUniqueId = false; _dbgFallback = true; break;
-        }
-        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} vm={_dbgViewModel} redeploy={_dbgRedeploy} uid={_dbgUniqueId} fallback={_dbgFallback} - drop and pick up the weapon (or switch weapons) to see the effect");
-        _redeployed.Remove(player.SteamID);
-        ApplyToHeldWeapons(player.SteamID);
-    }
-
-    private void SetVariant(bool paint, bool clear, bool mesh, bool uniqueId, bool fallback)
-    {
-        _dbgPaint = paint; _dbgClear = clear; _dbgMesh = mesh; _dbgUniqueId = uniqueId; _dbgFallback = fallback;
-    }
-
-    private void OnMeshCommand(CCSPlayerController? player, CommandInfo info)
-    {
-        if (player is null || !player.IsValid || !player.PawnIsAlive || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
-        var pawn = player.PlayerPawn.Value;
-        var weapon = pawn?.WeaponServices?.ActiveWeapon.Value;
-        if (pawn is null || weapon is null || !weapon.IsValid) return;
-        var node = weapon.CBodyComponent?.SceneNode;
-        if (node is null) return;
-        var state = node.GetSkeletonInstance().ModelState;
-        var econ = weapon.AttributeManager.Item;
-        player.PrintToChat($" [Celtist] {weapon.DesignerName} def {econ.ItemDefinitionIndex} paint {weapon.FallbackPaintKit} quality {econ.EntityQuality} itemid {econ.ItemID} mesh {state.MeshGroupMask}");
-        var next = state.MeshGroupMask == 2UL ? 1UL : 2UL;
-        state.MeshGroupMask = next;
-        foreach (var vm in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
-            if (vm.IsValid && vm.OwnerEntity.Value?.Index == pawn.Index) vm.CBodyComponent?.SceneNode?.GetSkeletonInstance().ModelState.MeshGroupMask = next;
-        player.PrintToChat($" [Celtist] mesh now {next} - type !mesh again to flip back");
     }
 
     private void OnNoclipCommand(CCSPlayerController? player, CommandInfo info)

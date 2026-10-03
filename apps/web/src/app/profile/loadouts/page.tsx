@@ -312,6 +312,7 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
   const isAgent = skin.slot === 'AGENT';
   const [charm, setCharm] = useState<Charm | null>(null);
   const [charmSeed, setCharmSeed] = useState('0');
+  const [charmPos, setCharmPos] = useState({ x: 0, y: 0, z: 0 });
   const charms = useApi<{ keychains: Charm[] }>(!isAgent && skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' ? '/keychains?pageSize=100' : null);
   const found = useApi<{ stickers: Sticker[] }>(pickSlot !== null && q.length >= 2 ? `/stickers?q=${encodeURIComponent(q)}&pageSize=12` : null);
   const detail = useApi<{ prices: PriceEntry[] }>(`/skins/${skin.id}`);
@@ -331,7 +332,7 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
       body: {
         slot: skin.slot, weaponDefIndex: skin.weaponDefIndex, skinId: skin.id, floatValue: usedFloat, paintSeed: Number(pattern),
         statTrak: statTrak && skin.statTrakAvailable, nameTag: nameTag || null,
-        keychainId: charm?.id ?? null, keychainSeed: Number(charmSeed) || 0,
+        keychainId: charm?.id ?? null, keychainSeed: Number(charmSeed) || 0, keychainOffsetX: charmPos.x, keychainOffsetY: charmPos.y, keychainOffsetZ: charmPos.z,
         stickers: stickers.flatMap((s, i) => (s ? [{ stickerId: s.sticker.id, slotIndex: i, wear: s.wear, rotation: s.rotation, scale: s.scale }] : [])),
       },
     });
@@ -411,6 +412,14 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
               </button>
             ))}
           </div>
+          {charm && (
+            <div className="mt-2 space-y-1 rounded-md border p-2 text-xs">
+              <div className="text-muted">Position des Charms an der Waffe (0 = Standard)</div>
+              {(['x', 'y', 'z'] as const).map((axis) => (
+                <label key={axis} className="flex items-center gap-2"><span className="w-6 uppercase text-muted">{axis}</span><input type="range" min={-10} max={10} step={0.1} value={charmPos[axis]} onChange={(e) => setCharmPos({ ...charmPos, [axis]: Number(e.target.value) })} className="flex-1 accent-[var(--primary)]" /><span className="w-10 text-right font-mono">{charmPos[axis].toFixed(1)}</span></label>
+              ))}
+            </div>
+          )}
           {charm && <div className="mt-1 flex items-end gap-2"><span className="flex-1 truncate text-xs text-muted">{charm.name}</span><div className="w-28"><Input label="Charm-Muster" inputMode="numeric" value={charmSeed} onChange={(e) => setCharmSeed(e.target.value.replace(/[^\d]/g, '').slice(0, 5))} /></div></div>}
         </div>
       )}

@@ -304,8 +304,8 @@ export class LoadoutsService {
           nameTag: it.nameTag,
           modelPath: row.skin?.modelPath ?? null,
           legacyModel: row.skin?.legacyModel ?? false,
-          keychain: row.keychain ? { defIndex: row.keychain.defIndex, seed: row.keychainSeed } : null,
-          stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear })),
+          keychain: row.keychain ? { defIndex: row.keychain.defIndex, seed: row.keychainSeed, offsetX: row.keychainOffsetX, offsetY: row.keychainOffsetY, offsetZ: row.keychainOffsetZ } : null,
+          stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear, offsetX: st.offsetX ?? 0, offsetY: st.offsetY ?? 0, rotation: st.rotation ?? 0, scale: st.scale ?? 1 })),
         });
       }
       for (const sk of applied.skipped) skipped.push({ team: side, weaponDefIndex: sk.weaponDefIndex, reasons: sk.reasons as string[] });
@@ -365,6 +365,9 @@ export class LoadoutsService {
           nameTag: source.nameTag ?? null,
           keychainId: source.keychainId ?? null,
           keychainSeed: source.keychainSeed ?? 0,
+          keychainOffsetX: source.keychainOffsetX ?? 0,
+          keychainOffsetY: source.keychainOffsetY ?? 0,
+          keychainOffsetZ: source.keychainOffsetZ ?? 0,
           stickers: { create: item.stickers.map((s) => ({ stickerId: s.sticker.id, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })) },
         },
       });

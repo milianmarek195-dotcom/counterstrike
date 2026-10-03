@@ -50,6 +50,10 @@ export const inventoryItemInputSchema = z
     /** Weapon charm; only on weapons (not knives, gloves or agents). */
     keychainId: z.uuid().nullish().transform((v) => v ?? null),
     keychainSeed: z.number().int().min(0).max(100_000).default(0),
+    /** Where the charm hangs on the weapon (game units, 0 = the default hang point). */
+    keychainOffsetX: z.number().min(-20).max(20).default(0),
+    keychainOffsetY: z.number().min(-20).max(20).default(0),
+    keychainOffsetZ: z.number().min(-20).max(20).default(0),
   })
   .refine((v) => !(v.statTrak && v.souvenir), { message: 'An item cannot be StatTrak and Souvenir', path: ['souvenir'] })
   .refine((v) => new Set(v.stickers.map((s) => s.slotIndex)).size === v.stickers.length, { message: 'A sticker slot is used twice', path: ['stickers'] });

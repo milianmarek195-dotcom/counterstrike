@@ -8,21 +8,31 @@ using CounterStrikeSharp.API.Modules.Timers;
 
 namespace Celtist.Tournament;
 
+/// <summary>
+/// Skin changer. The way weapons are written follows the established CS2 skin plugins (WeaponPaints): a unique item id per
+/// weapon, the fallback paint fields plus the "set item texture prefab" attribute, stickers and charms as attributes of the
+/// networked list, and the old/new weapon model selected with the "body" body group. A weapon that already exists when the
+/// loadout arrives is removed and given again (RefreshWeapons), because the first-person model is only built once.
+/// </summary>
 public sealed partial class CeltistTournamentPlugin
 {
-    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null, bool Legacy = false, List<(int Slot, int Def, float Wear)>? Stickers = null, int KeychainDef = 0, int KeychainSeed = 0);
+    private sealed record StickerPart(int Slot, int Def, float Wear, float OffsetX, float OffsetY, float Rotation, float Scale);
+
+    private sealed record SkinItem(
+        string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag,
+        string? ModelPath, bool Legacy, List<StickerPart> Stickers, int KeychainDef, int KeychainSeed, float KeychainX, float KeychainY, float KeychainZ);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
-    // switches for finding out why a skin does not show (!skindbg): each part of the weapon skin can be turned off on its own
-    private bool _dbgClear = true, _dbgPaint = true, _dbgMesh = true, _dbgExtras = true;
-    // the first-person model is a separate entity from the weapon: changing its mesh group made the held skin disappear, so it stays off unless tested with !skindbg vm
-    private bool _dbgViewModel;
-    private bool _dbgRedeploy = true;
-    private bool _dbgUniqueId;   // true: unique item id like knives and gloves; false: the shared custom id 16384
-    private bool _dbgFallback = true; // fallback paint fields on the weapon entity
-    private readonly Dictionary<ulong, string> _redeployed = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
+    /// <summary>Weapons this plugin already wrote (entity index → item id + what was written), so a weapon is not rewritten on every trigger.</summary>
+    private readonly Dictionary<uint, (ulong Id, string Signature)> _stamped = new();
+
+    // Econ attributes are set through the game's own function (located by signature, see gamedata/celtist.json).
+    // The signature has to be re-checked after big CS2 updates; if it cannot be resolved, only the fallback fields are used.
+    private MemoryFunctionVoid<nint, string, float>? _setAttribute;
+    private bool _attributeSetterTried;
+    private long _nextItemId = 65_578; // synthetic item ids, unique per map
 
     /// <summary>
     /// Applies the loadout once, shortly after the last trigger (spawn, team change): several triggers in a row used to run
@@ -43,12 +53,6 @@ public sealed partial class CeltistTournamentPlugin
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
-    // Econ attributes are set through the game's own function (located by signature, see gamedata/celtist.json).
-    // The signature has to be re-checked after big CS2 updates; if it cannot be resolved, knives and gloves stay default.
-    private MemoryFunctionVoid<nint, string, float>? _setAttribute;
-    private bool _attributeSetterTried;
-    private long _nextItemId = 65_578; // synthetic item ids for knives and gloves, unique per server run
-
     /// <summary>
     /// Fetches the player's loadout (already filtered by the backend to what the player may use right now) and applies
     /// it. Disabled unless SkinsEnabled is true in the plugin config AND the server has skins enabled in the admin
@@ -64,65 +68,41 @@ public sealed partial class CeltistTournamentPlugin
             var json = response.Json();
             if (!json.GetProperty("enabled").GetBoolean()) return;
             var items = new List<SkinItem>();
-            foreach (var i in json.GetProperty("items").EnumerateArray())
-                items.Add(new SkinItem(
-                    i.GetProperty("team").GetString() ?? "T", i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
-                    (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(),
-                    i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null,
-                    i.TryGetProperty("modelPath", out var mp) && mp.ValueKind == JsonValueKind.String ? mp.GetString() : null,
-                    i.TryGetProperty("legacyModel", out var lg) && lg.ValueKind == JsonValueKind.True,
-                    ParseStickers(i), i.TryGetProperty("keychain", out var kc) && kc.ValueKind == JsonValueKind.Object ? kc.GetProperty("defIndex").GetInt32() : 0,
-                    i.TryGetProperty("keychain", out var kc2) && kc2.ValueKind == JsonValueKind.Object ? kc2.GetProperty("seed").GetInt32() : 0));
+            foreach (var i in json.GetProperty("items").EnumerateArray()) items.Add(ParseItem(i));
             if (items.Count == 0) return;
-            Server.NextFrame(() => { _loadouts[steamId] = items; ApplyToHeldWeapons(steamId); ApplyGloves(steamId); });
+            Server.NextFrame(() =>
+            {
+                _loadouts[steamId] = items;
+                ApplyGloves(steamId);
+                RefreshWeapons(steamId); // the weapons of this life were created before the loadout was known
+            });
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] skin load failed for {Steam}: {Message}", steamId, e.Message); }
     }
 
-    private static List<(int Slot, int Def, float Wear)> ParseStickers(JsonElement item)
+    private static SkinItem ParseItem(JsonElement i)
     {
-        var list = new List<(int, int, float)>();
-        if (item.TryGetProperty("stickers", out var arr) && arr.ValueKind == JsonValueKind.Array)
+        string? Str(string name) => i.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        var stickers = new List<StickerPart>();
+        if (i.TryGetProperty("stickers", out var arr) && arr.ValueKind == JsonValueKind.Array)
             foreach (var s in arr.EnumerateArray())
-                list.Add((s.GetProperty("slot").GetInt32(), s.GetProperty("defIndex").GetInt32(), (float)s.GetProperty("wear").GetDouble()));
-        return list;
-    }
-
-    /// <summary>
-    /// A weapon the game created for the player carries the stickers and charm of the player's real Steam item. The loadout
-    /// decides what is on the weapon, so everything is removed first and only the loadout's own stickers and charm are set.
-    /// </summary>
-    private void ApplyExtras(CEconItemView econ, SkinItem item)
-    {
-        if (_dbgClear)
+            {
+                float F(string n, float d) => s.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? (float)v.GetDouble() : d;
+                stickers.Add(new StickerPart(s.GetProperty("slot").GetInt32(), s.GetProperty("defIndex").GetInt32(), F("wear", 0), F("offsetX", 0), F("offsetY", 0), F("rotation", 0), F("scale", 1)));
+            }
+        int kcDef = 0, kcSeed = 0;
+        float kcX = 0, kcY = 0, kcZ = 0;
+        if (i.TryGetProperty("keychain", out var kc) && kc.ValueKind == JsonValueKind.Object)
         {
-            econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
-            econ.AttributeList.Attributes.RemoveAll();
+            kcDef = kc.GetProperty("defIndex").GetInt32();
+            kcSeed = kc.GetProperty("seed").GetInt32();
+            float K(string n) => kc.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? (float)v.GetDouble() : 0f;
+            kcX = K("offsetX"); kcY = K("offsetY"); kcZ = K("offsetZ");
         }
-        if (!_dbgExtras) return;
-        // StatTrak needs the "strange" quality and the kill counter next to the fallback value
-        if (item.StatTrak) econ.EntityQuality = 9;
-        if (!EnsureAttributeSetter()) return;
-        // the paint also goes in as item attributes (like on knives): the kill feed and the "killed by" panel name the item from them
-        if (_dbgPaint) SetPaintAttributes(econ, item);
-        foreach (var handle in new[] { econ.NetworkedDynamicAttributes.Handle, econ.AttributeList.Handle })
-        {
-            if (item.StatTrak)
-            {
-                _setAttribute!.Invoke(handle, "kill eater", BitConverter.UInt32BitsToSingle((uint)item.StatTrakCount));
-                _setAttribute.Invoke(handle, "kill eater score type", 0);
-            }
-            foreach (var (slot, def, wear) in item.Stickers ?? new())
-            {
-                _setAttribute!.Invoke(handle, $"sticker slot {slot} id", BitConverter.UInt32BitsToSingle((uint)def));
-                _setAttribute.Invoke(handle, $"sticker slot {slot} wear", wear);
-            }
-            if (item.KeychainDef > 0)
-            {
-                _setAttribute!.Invoke(handle, "keychain slot 0 id", BitConverter.UInt32BitsToSingle((uint)item.KeychainDef));
-                _setAttribute.Invoke(handle, "keychain slot 0 seed", BitConverter.UInt32BitsToSingle((uint)item.KeychainSeed));
-            }
-        }
+        return new SkinItem(
+            i.GetProperty("team").GetString() ?? "T", i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
+            (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(), Str("nameTag"),
+            Str("modelPath"), i.TryGetProperty("legacyModel", out var lg) && lg.ValueKind == JsonValueKind.True, stickers, kcDef, kcSeed, kcX, kcY, kcZ);
     }
 
     private void ApplyToHeldWeapons(ulong steamId)
@@ -137,70 +117,67 @@ public sealed partial class CeltistTournamentPlugin
             if (weapon is null || !weapon.IsValid) continue;
             ApplyToWeapon(weapon, steamId, items);
         }
-        UpdateViewModelMask(steamId);
-        RedeployActiveWeapon(steamId);
     }
+
+    // Weapons with a class name that differs from the plain designer name of the entity (the game reports the M4A1-S as a weapon_m4a1).
+    private static readonly Dictionary<int, string> WeaponClassByDef = new()
+    {
+        [1] = "weapon_deagle", [2] = "weapon_elite", [3] = "weapon_fiveseven", [4] = "weapon_glock", [7] = "weapon_ak47", [8] = "weapon_aug", [9] = "weapon_awp",
+        [10] = "weapon_famas", [11] = "weapon_g3sg1", [13] = "weapon_galilar", [14] = "weapon_m249", [16] = "weapon_m4a1", [17] = "weapon_mac10", [19] = "weapon_p90",
+        [23] = "weapon_mp5sd", [24] = "weapon_ump45", [25] = "weapon_xm1014", [26] = "weapon_bizon", [27] = "weapon_mag7", [28] = "weapon_negev", [29] = "weapon_sawedoff",
+        [30] = "weapon_tec9", [32] = "weapon_hkp2000", [33] = "weapon_mp7", [34] = "weapon_mp9", [35] = "weapon_nova", [36] = "weapon_p250", [38] = "weapon_scar20",
+        [39] = "weapon_sg556", [40] = "weapon_ssg08", [60] = "weapon_m4a1_silencer", [61] = "weapon_usp_silencer", [63] = "weapon_cz75a", [64] = "weapon_revolver",
+    };
 
     /// <summary>
-    /// The first-person model is built when a weapon is drawn. A skin that arrives afterwards shows on the weapon lying on the
-    /// ground but not in the hand, so the weapon in hand is put away and drawn again once after its skin was set.
+    /// Removes the guns the loadout has a skin for and gives them again with the same ammo. Weapons created after the loadout
+    /// is known get their skin while they are created (GiveNamedItem hook), which is the only moment the first-person model
+    /// picks it up; weapons that were already in the hand are replaced this way.
     /// </summary>
-    private void RedeployActiveWeapon(ulong steamId)
-    {
-        try
-        {
-            if (!_dbgRedeploy || !_loadouts.TryGetValue(steamId, out var all)) return;
-            var player = Utilities.GetPlayerFromSteamId(steamId);
-            var active = player?.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
-            if (!IsHuman(player) || !player!.PawnIsAlive || active is null || !active.IsValid || IsKnife(active.DesignerName)) return;
-            var def = active.AttributeManager.Item.ItemDefinitionIndex;
-            var item = ForCurrentSide(steamId, all).FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null) return;
-            var signature = $"{active.Index}:{def}:{item.PaintIndex}:{item.Pattern}";
-            if (_redeployed.TryGetValue(steamId, out var last) && last == signature) return;
-            _redeployed[steamId] = signature;
-            player.ExecuteClientCommand("lastinv");
-            AddTimer(0.25f, () => { if (player.IsValid && player.PawnIsAlive) player.ExecuteClientCommand("lastinv"); }, TimerFlags.STOP_ON_MAPCHANGE);
-        }
-        catch (Exception e) { Logger.LogWarning("[Celtist] weapon redeploy failed: {Message}", e.Message); }
-    }
-
-    /// <summary>
-    /// CS2 keeps the old (legacy) and the new weapon mesh in one model. A finish made for the old mesh looks scrambled on the
-    /// new one and the other way round, so the mesh group follows the finish: 2 = legacy, 1 = current.
-    /// </summary>
-    private void SetMeshMask(CBaseEntity? entity, bool legacy)
-    {
-        try
-        {
-            var node = entity?.CBodyComponent?.SceneNode;
-            if (node is null) return;
-            var state = node.GetSkeletonInstance().ModelState;
-            var value = legacy ? 2UL : 1UL;
-            if (state.MeshGroupMask != value) state.MeshGroupMask = value;
-        }
-        catch (Exception e) { Logger.LogWarning("[Celtist] mesh group failed: {Message}", e.Message); }
-    }
-
-    /// <summary>The first-person model of the weapon in hand needs the same mesh group as the weapon itself.</summary>
-    private void UpdateViewModelMask(ulong steamId)
+    private void RefreshWeapons(ulong steamId)
     {
         try
         {
             if (!_loadouts.TryGetValue(steamId, out var all)) return;
             var player = Utilities.GetPlayerFromSteamId(steamId);
-            var pawn = player?.PlayerPawn.Value;
-            var active = pawn?.WeaponServices?.ActiveWeapon.Value;
-            if (pawn is null || active is null || !active.IsValid) return;
+            if (!IsHuman(player) || !player!.PawnIsAlive) return;
+            var pawn = player.PlayerPawn.Value;
+            var weapons = pawn?.WeaponServices?.MyWeapons;
+            if (pawn is null || weapons is null || weapons.Count == 0) return;
             var items = ForCurrentSide(steamId, all);
-            var item = IsKnife(active.DesignerName)
-                ? items.FirstOrDefault(i => i.Slot == "KNIFE")
-                : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null || !_dbgMesh || !_dbgViewModel) return;
-            foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
-                if (viewModel.IsValid && viewModel.OwnerEntity.Value?.Index == pawn.Index) SetMeshMask(viewModel, item.Legacy);
+            var activeDef = pawn.WeaponServices?.ActiveWeapon.Value?.AttributeManager.Item.ItemDefinitionIndex;
+            var give = new List<(string Name, int Def, int Clip, int Reserve)>();
+
+            foreach (var handle in weapons)
+            {
+                var weapon = handle.Value;
+                if (weapon is null || !weapon.IsValid || IsKnife(weapon.DesignerName)) continue;
+                var def = weapon.AttributeManager.Item.ItemDefinitionIndex;
+                if (!WeaponClassByDef.TryGetValue(def, out var className)) continue; // grenades, bomb, taser: nothing to skin
+                if (!items.Any(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES" or "AGENT"))) continue;
+                give.Add((className, def, weapon.Clip1, weapon.ReserveAmmo[0]));
+                weapon.AddEntityIOEvent("Kill", weapon, null, "", 0.1f);
+            }
+            if (give.Count == 0) return;
+
+            AddTimer(0.23f, () =>
+            {
+                if (!IsHuman(player) || !player.PawnIsAlive) return;
+                foreach (var g in give)
+                {
+                    var created = new CBasePlayerWeapon(player.GiveNamedItem(g.Name));
+                    Server.NextFrame(() =>
+                    {
+                        if (!created.IsValid) return;
+                        created.Clip1 = g.Clip;
+                        created.ReserveAmmo[0] = g.Reserve;
+                    });
+                }
+                if (activeDef is { } d && WeaponClassByDef.TryGetValue(d, out var activeName))
+                    AddTimer(0.15f, () => { if (player.IsValid && player.PawnIsAlive) player.ExecuteClientCommand($"use {activeName}"); }, TimerFlags.STOP_ON_MAPCHANGE);
+            }, TimerFlags.STOP_ON_MAPCHANGE);
         }
-        catch (Exception e) { Logger.LogWarning("[Celtist] view model mesh failed: {Message}", e.Message); }
+        catch (Exception e) { Logger.LogWarning("[Celtist] weapon refresh failed: {Message}", e.Message); }
     }
 
     /// <summary>
@@ -270,6 +247,12 @@ public sealed partial class CeltistTournamentPlugin
 
     private static bool IsKnife(string? designerName) => designerName is not null && (designerName.Contains("knife", StringComparison.Ordinal) || designerName.Contains("bayonet", StringComparison.Ordinal));
 
+    private static string Signature(SkinItem item) =>
+        $"{item.PaintIndex}:{item.Pattern}:{item.Float}:{item.StatTrak}:{item.StatTrakCount}:{item.NameTag}:{item.Legacy}:{item.KeychainDef}:{item.KeychainSeed}:{item.KeychainX}:{item.KeychainY}:{item.KeychainZ}:" +
+        string.Join(",", item.Stickers.Select(s => $"{s.Slot}/{s.Def}/{s.Wear}/{s.OffsetX}/{s.OffsetY}/{s.Rotation}/{s.Scale}"));
+
+    private static float AsFloat(int value) => BitConverter.Int32BitsToSingle(value);
+
     private void ApplyToWeapon(CBasePlayerWeapon weapon, ulong steamId, List<SkinItem> allItems)
     {
         try
@@ -283,28 +266,62 @@ public sealed partial class CeltistTournamentPlugin
             }
 
             var def = econ.ItemDefinitionIndex;
-            var item = items.FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null)
+            var item = items.FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES" or "AGENT"));
+            if (item is null) return;
+
+            var signature = Signature(item);
+            if (_stamped.TryGetValue(weapon.Index, out var done) && done.Signature == signature && done.Id == econ.ItemID) return; // already written exactly like this
+
+            // 1. clean slate: the stickers, charm and StatTrak of the player's real Steam item must not shine through
+            econ.EntityQuality = item.StatTrak ? 9 : 0;
+            econ.AttributeList.Attributes.RemoveAll();
+            econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
+
+            // 2. a unique item of the player
+            StampItemId(econ);
+            econ.AccountID = (uint)steamId;
+            if (!string.IsNullOrEmpty(item.NameTag)) econ.CustomName = item.NameTag;
+
+            // 3. finish: fallback fields + the paint attribute
+            weapon.FallbackPaintKit = item.PaintIndex;
+            weapon.FallbackSeed = item.Pattern;
+            weapon.FallbackWear = item.Float;
+            if (EnsureAttributeSetter())
             {
-                Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: no entry on this side ({Side} items: {Count})", weapon.DesignerName, def, steamId, Utilities.GetPlayerFromSteamId(steamId)?.TeamNum, items.Count);
-                return;
+                var net = econ.NetworkedDynamicAttributes.Handle;
+                _setAttribute!.Invoke(net, "set item texture prefab", item.PaintIndex);
+                if (item.StatTrak)
+                {
+                    foreach (var handle in new[] { net, econ.AttributeList.Handle })
+                    {
+                        _setAttribute.Invoke(handle, "kill eater", AsFloat(item.StatTrakCount));
+                        _setAttribute.Invoke(handle, "kill eater score type", 0);
+                    }
+                }
+                foreach (var s in item.Stickers)
+                {
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} id", AsFloat(s.Def));
+                    if (s.OffsetX != 0 || s.OffsetY != 0) _setAttribute.Invoke(net, $"sticker slot {s.Slot} schema", 0);
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} offset x", s.OffsetX);
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} offset y", s.OffsetY);
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} wear", s.Wear);
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} scale", s.Scale);
+                    _setAttribute.Invoke(net, $"sticker slot {s.Slot} rotation", s.Rotation);
+                }
+                if (item.KeychainDef > 0)
+                {
+                    _setAttribute.Invoke(net, "keychain slot 0 id", AsFloat(item.KeychainDef));
+                    _setAttribute.Invoke(net, "keychain slot 0 offset x", item.KeychainX);
+                    _setAttribute.Invoke(net, "keychain slot 0 offset y", item.KeychainY);
+                    _setAttribute.Invoke(net, "keychain slot 0 offset z", item.KeychainZ);
+                    _setAttribute.Invoke(net, "keychain slot 0 seed", AsFloat(item.KeychainSeed));
+                }
             }
 
-            if (_dbgUniqueId) StampItemId(econ);
-            else
-            {
-                econ.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
-                econ.ItemIDLow = 16384 & 0xFFFFFFFF;
-                econ.ItemIDHigh = 0;
-            }
-            econ.AccountID = (uint)steamId; // the item belongs to the player, otherwise the client ignores the fallback paint
-            weapon.FallbackPaintKit = _dbgFallback ? item.PaintIndex : 0;
-            weapon.FallbackSeed = _dbgFallback ? item.Pattern : 0;
-            weapon.FallbackWear = _dbgFallback ? item.Float : 0f;
-            weapon.FallbackStatTrak = _dbgFallback && item.StatTrak ? item.StatTrakCount : -1;
-            ApplyExtras(econ, item);
-            Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
-            if (_dbgMesh) SetMeshMask(weapon, item.Legacy);
+            // 4. a finish made for the old weapon model needs the old model: the "body" body group selects it
+            weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
+
+            _stamped[weapon.Index] = (econ.ItemID, signature);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon: {Message}", e.Message); }
@@ -337,7 +354,7 @@ public sealed partial class CeltistTournamentPlugin
         weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
         SetPaintAttributes(econ, item);
         Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
-        SetMeshMask(weapon, item.Legacy);
+        weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
         Logger.LogInformation("[Celtist] knife for {Steam}: def {Def}, paint {Paint}, pattern {Seed}, float {Float}", steamId, item.WeaponDefIndex, item.PaintIndex, item.Pattern, item.Float);
     }
 
@@ -365,10 +382,10 @@ public sealed partial class CeltistTournamentPlugin
     private void OnAgentCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || !player.IsValid) return;
-        if (!Config.AgentsEnabled) { player.PrintToChat(" Agents are disabled on this server."); return; }
+        if (!Config.AgentsEnabled) { player.PrintToChat(" Agents are disabled on this server."); return; }
         var id = player.SteamID;
-        if (!_agentOptIn.Remove(id)) { _agentOptIn.Add(id); player.PrintToChat(" [Celtist] Agent on - applied now and at every spawn."); ApplyAgent(id); }
-        else player.PrintToChat(" [Celtist] Agent off - your default model returns with the next spawn.");
+        if (!_agentOptIn.Remove(id)) { _agentOptIn.Add(id); player.PrintToChat(" [Celtist] Agent on - applied now and at every spawn."); ApplyAgent(id); }
+        else player.PrintToChat(" [Celtist] Agent off - your default model returns with the next spawn.");
     }
 
     private void ApplyAgent(ulong steamId)
@@ -447,7 +464,6 @@ public sealed partial class CeltistTournamentPlugin
         item.ItemIDHigh = (uint)(id >> 32);
     }
 
-    /// <summary>Paint kit, pattern and wear (and the StatTrak counter) as econ attributes, on both attribute lists the client reads.</summary>
     private void SetPaintAttributes(CEconItemView item, SkinItem skin)
     {
         if (!EnsureAttributeSetter()) { Logger.LogWarning("[Celtist] paint attributes skipped: attribute function unavailable"); return; }
