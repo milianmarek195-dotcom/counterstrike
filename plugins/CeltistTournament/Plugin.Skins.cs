@@ -15,6 +15,8 @@ public sealed partial class CeltistTournamentPlugin
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
     // switches for finding out why a skin does not show (!skindbg): each part of the weapon skin can be turned off on its own
     private bool _dbgClear = true, _dbgPaint = true, _dbgMesh = true, _dbgExtras = true;
+    // the first-person model is a separate entity from the weapon: changing its mesh group made the held skin disappear, so it stays off unless tested with !skindbg vm
+    private bool _dbgViewModel;
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
 
@@ -165,7 +167,7 @@ public sealed partial class CeltistTournamentPlugin
             var item = IsKnife(active.DesignerName)
                 ? items.FirstOrDefault(i => i.Slot == "KNIFE")
                 : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null || !_dbgMesh) return;
+            if (item is null || !_dbgMesh || !_dbgViewModel) return;
             foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
                 if (viewModel.IsValid && viewModel.OwnerEntity.Value?.Index == pawn.Index) SetMeshMask(viewModel, item.Legacy);
         }

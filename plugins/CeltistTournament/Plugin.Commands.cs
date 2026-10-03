@@ -245,9 +245,10 @@ public sealed partial class CeltistTournamentPlugin
             case "paint": _dbgPaint = !_dbgPaint; break;
             case "mesh": _dbgMesh = !_dbgMesh; break;
             case "extras": _dbgExtras = !_dbgExtras; break;
-            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; break;
+            case "vm": _dbgViewModel = !_dbgViewModel; break;
+            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; _dbgViewModel = false; break;
         }
-        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} - drop and pick up the weapon (or switch weapons) to see the effect");
+        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} vm={_dbgViewModel} - drop and pick up the weapon (or switch weapons) to see the effect");
         ApplyToHeldWeapons(player.SteamID);
     }
 
