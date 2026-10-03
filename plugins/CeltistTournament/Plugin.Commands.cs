@@ -180,6 +180,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_unban", "Remove all server-side bans (vote kicks) or one SteamID64: !unban [steamid64]", OnUnbanCommand);
         AddCommand("css_ct", "Switch yourself to the CT side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.CounterTerrorist));
         AddCommand("css_t", "Switch yourself to the T side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.Terrorist));
         AddCommand("css_test", "Test mode for listed players: endless warmup, endless money, buy anywhere", OnTestCommand);
@@ -199,6 +200,27 @@ public sealed partial class CeltistTournamentPlugin
         _freeSide.Add(player.SteamID);
         player.ChangeTeam(team);
         player.PrintToChat($" [Celtist] You are now {(team == CsTeam.CounterTerrorist ? "CT" : "T")}.");
+    }
+
+    /// <summary>Who may come back is decided by the platform (match assignment), not by the game's own ban list.</summary>
+    private void ClearGameBans(ulong? steamId = null)
+    {
+        if (steamId is { } id)
+        {
+            var account = id - SteamId64Base;
+            Server.ExecuteCommand($"removeid [U:1:{account}]");
+            Server.ExecuteCommand($"removeid STEAM_1:{account % 2}:{account / 2}");
+        }
+        Server.ExecuteCommand("removeallids");
+        Server.ExecuteCommand("writeid");
+    }
+
+    private void OnUnbanCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
+        ulong? target = ulong.TryParse(info.ArgString.Trim(), out var parsed) ? parsed : null;
+        ClearGameBans(target);
+        player.PrintToChat($" [Celtist] Server bans cleared{(target is null ? string.Empty : " for " + target)}.");
     }
 
     private bool _testMode;
