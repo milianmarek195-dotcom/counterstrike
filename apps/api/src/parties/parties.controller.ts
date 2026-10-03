@@ -41,6 +41,13 @@ export class PartiesController {
     await this.parties.invite(auth.userId, body);
   }
 
+  /** Admins: add a player straight to the party, without an invitation. */
+  @Post('force-add')
+  @HttpCode(204)
+  async forceAdd(@CurrentAuth() auth: AuthContext, @Body({ schema: inviteBody }) body: z.infer<typeof inviteBody>): Promise<void> {
+    await this.parties.forceAdd(auth.userId, auth.permissions.has('admin.access'), body);
+  }
+
   @Post('invites/:id/accept')
   @HttpCode(204)
   async accept(@CurrentAuth() auth: AuthContext, @Param('id', { schema: idParam }) id: string): Promise<void> {

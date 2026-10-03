@@ -31,6 +31,30 @@ describe('parties and the website-first match flow', () => {
     }
   }
 
+  describe('force add', () => {
+    it('lets an admin put players straight into the party, nobody else', async () => {
+      await as(t, admin).post('/v1/parties').expect(201);
+      await as(t, admin).post('/v1/parties/force-add', { userId: friends[0]!.id }).expect(204);
+      const mine = (await as(t, admin).get('/v1/parties/me')).body;
+      expect(mine.party.members.map((m: { displayName: string }) => m.displayName)).toContain('Friend0');
+      // an already seated player cannot be added twice, a normal leader may not force anybody
+      await as(t, admin).post('/v1/parties/force-add', { userId: friends[0]!.id }).expect(409);
+      await as(t, leader).post('/v1/parties').expect(201);
+      await as(t, leader).post('/v1/parties/force-add', { userId: friends[1]!.id }).expect(403);
+    });
+
+    it('moves a member out of another party but never takes a party leader', async () => {
+      await as(t, leader).post('/v1/parties').expect(201);
+      await as(t, leader).post('/v1/parties/invite', { userId: friends[2]!.id }).expect(204);
+      const invite = (await as(t, friends[2]!).get('/v1/parties/me')).body.invites[0];
+      await as(t, friends[2]!).post(`/v1/parties/invites/${invite.id}/accept`).expect(204);
+      await as(t, admin).post('/v1/parties').expect(201);
+      await as(t, admin).post('/v1/parties/force-add', { userId: friends[2]!.id }).expect(204); // moved
+      expect((await as(t, friends[2]!).get('/v1/parties/me')).body.party.leader?.id ?? admin.id).toBeTruthy();
+      await as(t, admin).post('/v1/parties/force-add', { userId: leader.id }).expect(409); // leads its own party
+    });
+  });
+
   describe('party management', () => {
     it('creates a party with the creator as leader', async () => {
       const res = await as(t, leader).post('/v1/parties').expect(201);

@@ -107,6 +107,37 @@ export class PartiesService {
     this.emit(party.id, [leaderId, user.id]);
   }
 
+  /**
+   * Admins only: puts a player into the caller's party without an invitation. A player who sits in another party is moved
+   * (not if they lead it – that party would be left without a leader).
+   */
+  async forceAdd(leaderId: string, canForce: boolean, target: { userId?: string; steamId?: string }): Promise<void> {
+    if (!canForce) throw forbidden('Only admins can add players to a party directly', 'MISSING_PERMISSION');
+    const party = await this.requireLeaderParty(leaderId);
+    const user = await this.prisma.user.findFirst({ where: target.userId ? { id: target.userId } : { steamId: target.steamId } });
+    if (!user) throw notFound('USER_NOT_FOUND', 'That player has not signed in to the platform yet');
+    if (user.id === leaderId) throw badRequest('CANNOT_INVITE_SELF', 'You are already in the party');
+    const current = await this.prisma.partyMember.findUnique({ where: { userId: user.id } });
+    if (current?.partyId === party.id) throw conflict('PLAYER_IN_PARTY', 'That player is already in your party');
+    if (current) {
+      const theirParty = await this.prisma.party.findUnique({ where: { id: current.partyId } });
+      if (theirParty?.leaderId === user.id) throw conflict('PLAYER_LEADS_PARTY', 'That player leads another party');
+    }
+    const count = await this.prisma.partyMember.count({ where: { partyId: party.id } });
+    if (count >= PARTY_MAX_MEMBERS) throw conflict('PARTY_FULL', `A party has at most ${PARTY_MAX_MEMBERS} members`);
+
+    await this.prisma.$transaction([
+      ...(current ? [this.prisma.partyMember.delete({ where: { userId: user.id } })] : []),
+      this.prisma.partyMember.create({ data: { partyId: party.id, userId: user.id } }),
+      this.prisma.partyInvite.updateMany({ where: { partyId: party.id, inviteeId: user.id, status: 'PENDING' }, data: { status: 'ACCEPTED' } }),
+    ]);
+    const leader = await this.prisma.user.findUniqueOrThrow({ where: { id: leaderId }, select: { displayName: true } });
+    await this.addToOpenMatch(party.id, user.id);
+    await this.notifications.notify({ userId: user.id, type: 'party.joined', title: `${leader.displayName} added you to their party`, data: { partyId: party.id } });
+    if (current) await this.emitFor(current.partyId);
+    await this.emitFor(party.id);
+  }
+
   async acceptInvite(userId: string, inviteId: string): Promise<void> {
     const invite = await this.prisma.partyInvite.findUnique({ where: { id: inviteId } });
     if (!invite || invite.inviteeId !== userId || invite.status !== 'PENDING') throw notFound('INVITE_NOT_FOUND', 'Invitation does not exist');

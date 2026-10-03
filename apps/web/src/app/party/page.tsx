@@ -14,7 +14,7 @@ interface Found { players: Array<{ steamId: string; displayName: string; avatarU
 interface Friends { available: boolean; reason?: string; friends: Array<{ steamId: string; displayName: string; avatarUrl: string | null }> }
 
 /** Invite by username (search) or from the Steam friend list. */
-function InvitePanel({ memberNames, pendingNames, busy, onInvite }: { memberNames: string[]; pendingNames: string[]; busy: boolean; onInvite: (steamId: string) => void }) {
+function InvitePanel({ memberNames, pendingNames, busy, onInvite, onForce }: { memberNames: string[]; pendingNames: string[]; busy: boolean; onInvite: (steamId: string) => void; onForce?: (steamId: string) => void }) {
   const [name, setName] = useState('');
   const term = name.trim();
   const found = useApi<Found>(term.length >= 2 ? `/players?q=${encodeURIComponent(term)}&pageSize=8` : null);
@@ -23,7 +23,12 @@ function InvitePanel({ memberNames, pendingNames, busy, onInvite }: { memberName
   const row = (p: { steamId: string; displayName: string }) => (
     <li key={p.steamId} className="flex items-center justify-between py-1.5 text-sm">
       <span>{p.displayName}</span>
-      {taken.has(p.displayName) ? <span className="text-xs text-muted">in Party / eingeladen</span> : <Button disabled={busy} onClick={() => onInvite(p.steamId)}>Einladen</Button>}
+      {memberNames.includes(p.displayName) ? <span className="text-xs text-muted">in der Party</span> : (
+        <span className="flex gap-1">
+          {!taken.has(p.displayName) && <Button disabled={busy} onClick={() => onInvite(p.steamId)}>Einladen</Button>}
+          {onForce && <Button variant="secondary" disabled={busy} title="Direkt in die Party setzen, ohne dass die Person annehmen muss" onClick={() => onForce(p.steamId)}>Direkt hinzufügen</Button>}
+        </span>
+      )}
     </li>
   );
   return (
@@ -44,7 +49,7 @@ function InvitePanel({ memberNames, pendingNames, busy, onInvite }: { memberName
 
 /** Website-first flow: party → players → (in the match) teams → map → server → connect. */
 export default function PartyPage() {
-  const { me, login } = useAuth();
+  const { me, login, can } = useAuth();
   const q = useApi<Party>(me.user ? '/parties/me' : null);
   const act = useAction(q.reload);
     const [a, setA] = useState(5);
@@ -69,7 +74,7 @@ export default function PartyPage() {
               <li key={m.id} className="flex items-center justify-between py-2"><span>{m.displayName} {m.isLeader && <b className="text-primary">Leader</b>}</span>
                 {p.isLeader && !m.isLeader && <span className="flex gap-1"><Button variant="secondary" onClick={() => post('/transfer-leadership', { userId: m.id })}>Leader</Button><Button variant="danger" onClick={() => post('/kick', { userId: m.id })}>Kick</Button></span>}</li>
             ))}</ul>
-            {p.isLeader && <InvitePanel busy={act.busy} memberNames={p.members.map((m) => m.displayName)} pendingNames={p.invites?.map((i) => i.invitee.displayName) ?? []} onInvite={(steamId) => post('/invite', { steamId })} />}
+            {p.isLeader && <InvitePanel busy={act.busy} memberNames={p.members.map((m) => m.displayName)} pendingNames={p.invites?.map((i) => i.invitee.displayName) ?? []} onInvite={(steamId) => post('/invite', { steamId })} onForce={can('admin.access') ? (steamId) => post('/force-add', { steamId }) : undefined} />}
             <div className="mt-4 flex gap-2"><Button variant="secondary" onClick={() => post('/leave')}>Verlassen</Button>{p.isLeader && <Button variant="danger" onClick={() => { if (confirm('Party auflösen?')) post('', undefined, 'DELETE'); }}>Auflösen</Button>}</div>
           </Card>
           <Card>
