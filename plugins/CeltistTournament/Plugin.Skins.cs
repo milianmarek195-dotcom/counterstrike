@@ -88,9 +88,16 @@ public sealed partial class CeltistTournamentPlugin
     {
         econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
         econ.AttributeList.Attributes.RemoveAll();
+        // StatTrak needs the "strange" quality and the kill counter next to the fallback value
+        if (item.StatTrak) econ.EntityQuality = 9;
         if (!EnsureAttributeSetter()) return;
         foreach (var handle in new[] { econ.NetworkedDynamicAttributes.Handle, econ.AttributeList.Handle })
         {
+            if (item.StatTrak)
+            {
+                _setAttribute!.Invoke(handle, "kill eater", BitConverter.UInt32BitsToSingle((uint)item.StatTrakCount));
+                _setAttribute.Invoke(handle, "kill eater score type", 0);
+            }
             foreach (var (slot, def, wear) in item.Stickers ?? new())
             {
                 _setAttribute!.Invoke(handle, $"sticker slot {slot} id", BitConverter.UInt32BitsToSingle((uint)def));
