@@ -107,7 +107,8 @@ public sealed partial class CeltistTournamentPlugin
 
     private void ApplyToHeldWeapons(ulong steamId)
     {
-        if (!_loadouts.TryGetValue(steamId, out var items)) return;
+        // a player without a loadout still has to lose a skin that belongs to somebody else (a picked-up weapon)
+        var items = _loadouts.TryGetValue(steamId, out var own) ? own : new List<SkinItem>();
         var player = Utilities.GetPlayerFromSteamId(steamId);
         var weapons = player?.PlayerPawn.Value?.WeaponServices?.MyWeapons;
         if (weapons is null) return;
@@ -251,6 +252,30 @@ public sealed partial class CeltistTournamentPlugin
         $"{item.PaintIndex}:{item.Pattern}:{item.Float}:{item.StatTrak}:{item.StatTrakCount}:{item.NameTag}:{item.Legacy}:{item.KeychainDef}:{item.KeychainSeed}:{item.KeychainX}:{item.KeychainY}:{item.KeychainZ}:" +
         string.Join(",", item.Stickers.Select(s => $"{s.Slot}/{s.Def}/{s.Wear}/{s.OffsetX}/{s.OffsetY}/{s.Rotation}/{s.Scale}"));
 
+    /// <summary>
+    /// Skins and name tags belong to their owner: when somebody else picks the weapon up, it goes back to the plain weapon
+    /// (or gets the new holder's own skin for it, which ApplyToWeapon writes afterwards).
+    /// </summary>
+    private void StripSkin(CBasePlayerWeapon weapon)
+    {
+        var econ = weapon.AttributeManager.Item;
+        econ.AttributeList.Attributes.RemoveAll();
+        econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
+        econ.EntityQuality = 0;
+        econ.CustomName = string.Empty;
+        econ.ItemID = 0;
+        econ.ItemIDLow = 0;
+        econ.ItemIDHigh = 0;
+        econ.AccountID = 0;
+        weapon.FallbackPaintKit = 0;
+        weapon.FallbackSeed = 0;
+        weapon.FallbackWear = 0f;
+        weapon.FallbackStatTrak = -1;
+        weapon.AcceptInput("SetBodygroup", value: "body,0");
+        Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+        Logger.LogInformation("[Celtist] skin removed from {Name} (def {Def}): it now belongs to somebody without a skin for it", weapon.DesignerName, econ.ItemDefinitionIndex);
+    }
+
     private static float AsFloat(int value) => BitConverter.Int32BitsToSingle(value);
 
     private void ApplyToWeapon(CBasePlayerWeapon weapon, ulong steamId, List<SkinItem> allItems)
@@ -267,9 +292,14 @@ public sealed partial class CeltistTournamentPlugin
 
             var def = econ.ItemDefinitionIndex;
             var item = items.FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES" or "AGENT"));
-            if (item is null) return;
+            if (item is null)
+            {
+                // this weapon carries a skin this plugin wrote (for its former owner or the other side) but the holder has none for it
+                if (_stamped.Remove(weapon.Index)) StripSkin(weapon);
+                return;
+            }
 
-            var signature = Signature(item);
+            var signature = $"{steamId}:{Signature(item)}";
             if (_stamped.TryGetValue(weapon.Index, out var done) && done.Signature == signature && done.Id == econ.ItemID) return; // already written exactly like this
 
             // 1. clean slate: the stickers, charm and StatTrak of the player's real Steam item must not shine through
