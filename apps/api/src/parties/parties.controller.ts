@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createPartyMatchSchema, steamId64Schema, type CreatePartyMatchInput } from '@celtist/shared';
 import { Authenticated, CurrentAuth, type AuthContext } from '../security/access.js';
 import { PartiesService } from './parties.service.js';
+import { SteamFriendsService } from './steam-friends.service.js';
 
 const idParam = z.uuid();
 const inviteBody = z.object({ userId: z.uuid().optional(), steamId: steamId64Schema.optional() }).refine((v) => v.userId || v.steamId, { message: 'userId or steamId is required' });
@@ -12,7 +13,16 @@ const userBody = z.object({ userId: z.uuid() });
 @Controller('parties')
 @Authenticated()
 export class PartiesController {
-  constructor(private readonly parties: PartiesService) {}
+  constructor(
+    private readonly parties: PartiesService,
+    private readonly friends: SteamFriendsService,
+  ) {}
+
+  /** Steam friends that are registered here – invitable with the existing invite endpoint (by steamId). */
+  @Get('friends')
+  steamFriends(@CurrentAuth() auth: AuthContext) {
+    return this.friends.friendsOf(auth.userId);
+  }
 
   @Get('me')
   mine(@CurrentAuth() auth: AuthContext) {
