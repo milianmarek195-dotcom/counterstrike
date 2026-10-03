@@ -277,7 +277,8 @@ public sealed partial class CeltistTournamentPlugin
     {
         if (player is null || !player.IsValid || !player.PawnIsAlive) return;
         if (!Config.NoclipSteamIds.Contains(player.SteamID.ToString())) { player.PrintToChat(" You are not allowed to use noclip."); return; }
-        if (_map is not null) { player.PrintToChat(" No noclip while a match map is running."); return; }
+        // friendly (CUSTOM) matches and the time before a match start allow it; ranked and tournament maps never do
+        if (_map is not null && !string.Equals(_plan?.KindName, "CUSTOM", StringComparison.OrdinalIgnoreCase)) { player.PrintToChat(" No noclip in a tournament or ranked match."); return; }
         var pawn = player.PlayerPawn.Value;
         if (pawn is null || !pawn.IsValid) return;
         var on = pawn.MoveType != MoveType_t.MOVETYPE_NOCLIP;
