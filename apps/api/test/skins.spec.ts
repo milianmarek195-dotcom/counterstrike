@@ -423,16 +423,55 @@ describe('skins, inventory, loadouts and skin access', () => {
     it('delivers the active loadout with float and pattern for the plugin', async () => {
       const res = (await signed(serverId, 'GET', `/server/v1/loadouts/${player.steamId}`).expect(200)).body;
       expect(res).toMatchObject({ enabled: true, level: 3 });
-      const ak = res.items.find((i: { weaponDefIndex: number }) => i.weaponDefIndex === 7);
-      expect(ak).toMatchObject({ paintIndex: 282, pattern: 661, float: 0.2, statTrak: false });
-      expect(res.items).toHaveLength(2);
+      // an item equipped for BOTH sides is delivered once per side
+      const ak = res.items.filter((i: { weaponDefIndex: number }) => i.weaponDefIndex === 7);
+      expect(ak.map((i: { team: string }) => i.team).sort()).toEqual(['CT', 'T']);
+      expect(ak[0]).toMatchObject({ paintIndex: 282, pattern: 661, float: 0.2, statTrak: false });
+      expect(res.items).toHaveLength(4);
+    });
+
+    it('lets one weapon carry a different skin for T and for CT', async () => {
+      const loadout = (await as(t, player).get('/v1/loadouts').expect(200)).body.loadouts[0];
+      const asiimov = (await as(t, player).post('/v1/inventory', item({ slot: 'AWP', weaponDefIndex: 9, skinId: ids['AWP|Asiimov'], floatValue: 0.4, paintSeed: 5 })).expect(201)).body;
+      const lore = (await as(t, player).post('/v1/inventory', item({ slot: 'AWP', weaponDefIndex: 9, skinId: ids['AWP|Dragon Lore'], floatValue: 0.3, paintSeed: 12 })).expect(201)).body;
+      await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: asiimov.id, team: 'T' }, { inventoryItemId: lore.id, team: 'CT' }] }).expect(200);
+
+      const res = (await signed(serverId, 'GET', `/server/v1/loadouts/${player.steamId}`).expect(200)).body;
+      const awps = res.items.filter((i: { weaponDefIndex: number }) => i.weaponDefIndex === 9);
+      expect(awps).toHaveLength(2);
+      expect(awps.find((i: { team: string }) => i.team === 'T')).toMatchObject({ paintIndex: 279, pattern: 5 });
+      expect(awps.find((i: { team: string }) => i.team === 'CT')).toMatchObject({ paintIndex: 344, pattern: 12 });
+    });
+
+    it('a side-specific item beats the BOTH item for that side only', async () => {
+      const loadout = (await as(t, player).get('/v1/loadouts').expect(200)).body.loadouts[0];
+      const both = (await as(t, player).post('/v1/inventory', item({ slot: 'AWP', weaponDefIndex: 9, skinId: ids['AWP|Asiimov'], floatValue: 0.4 })).expect(201)).body;
+      const lore = (await as(t, player).post('/v1/inventory', item({ slot: 'AWP', weaponDefIndex: 9, skinId: ids['AWP|Dragon Lore'], floatValue: 0.3 })).expect(201)).body;
+      // BOTH together with a per-side item for the same weapon is refused
+      expect((await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: both.id, team: 'BOTH' }, { inventoryItemId: lore.id, team: 'CT' }] }).expect(400)).body.error).toBe('TEAM_CONFLICT');
+      // the same weapon twice for one side is refused as well
+      expect((await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: both.id, team: 'T' }, { inventoryItemId: lore.id, team: 'T' }] }).expect(400)).body.error).toBe('DUPLICATE_WEAPON');
+      // T only: CT gets nothing for the AWP
+      await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: both.id, team: 'T' }] }).expect(200);
+      const res = (await signed(serverId, 'GET', `/server/v1/loadouts/${player.steamId}`).expect(200)).body;
+      expect(res.items.filter((i: { weaponDefIndex: number }) => i.weaponDefIndex === 9).map((i: { team: string }) => i.team)).toEqual(['T']);
+    });
+
+    it('keeps the side when a loadout is duplicated, exported and imported', async () => {
+      const loadout = (await as(t, player).get('/v1/loadouts').expect(200)).body.loadouts[0];
+      const asiimov = (await as(t, player).post('/v1/inventory', item({ slot: 'AWP', weaponDefIndex: 9, skinId: ids['AWP|Asiimov'], floatValue: 0.4 })).expect(201)).body;
+      await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: asiimov.id, team: 'CT' }] }).expect(200);
+      const copy = (await as(t, player).post(`/v1/loadouts/${loadout.id}/duplicate`).expect(201)).body;
+      expect(copy.items).toMatchObject([{ weaponDefIndex: 9, team: 'CT' }]);
+      const exported = (await as(t, player).get(`/v1/loadouts/${loadout.id}/export`).expect(200)).body;
+      expect(exported.items[0]).toMatchObject({ weaponDefIndex: 9, team: 'CT' });
     });
 
     it('drops items the moment the temporary grant ends – without failing', async () => {
       t.clock.advance(61 * 60_000);
       const res = (await signed(serverId, 'GET', `/server/v1/loadouts/${player.steamId}`).expect(200)).body;
       expect(res).toMatchObject({ enabled: true, level: 0, items: [] });
-      expect(res.skipped).toHaveLength(2);
+      expect(res.skipped).toHaveLength(4); // two items, once per side
     });
 
     it('applies nothing on servers where skins are off (the default)', async () => {

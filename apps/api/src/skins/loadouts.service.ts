@@ -43,7 +43,7 @@ const view = (l: LoadoutRow, owner?: { displayName: string }) => ({
   createdAt: l.createdAt,
   updatedAt: l.updatedAt,
   ...(owner ? { owner: owner.displayName } : {}),
-  items: l.items.map((i) => ({ weaponDefIndex: i.weaponDefIndex, item: toView(i.inventoryItem) })),
+  items: l.items.map((i) => ({ weaponDefIndex: i.weaponDefIndex, team: i.team, item: toView(i.inventoryItem) })),
 });
 
 @Injectable()
@@ -81,25 +81,43 @@ export class LoadoutsService {
   async duplicate(userId: string, id: string) {
     const source = await this.load(userId, id);
     const copy = await this.createRow(userId, `${source.name} copy`.slice(0, 40), false);
-    await this.prisma.loadoutItem.createMany({ data: source.items.map((i) => ({ loadoutId: copy.id, inventoryItemId: i.inventoryItemId, weaponDefIndex: i.weaponDefIndex })) });
+    await this.prisma.loadoutItem.createMany({ data: source.items.map((i) => ({ loadoutId: copy.id, inventoryItemId: i.inventoryItemId, weaponDefIndex: i.weaponDefIndex, team: i.team })) });
     return view(await this.load(userId, copy.id));
   }
 
-  /** Chooses the inventory item for each weapon; replaces the previous selection. */
-  async setItems(userId: string, id: string, items: Array<{ inventoryItemId: string }>) {
+  /**
+   * Chooses the inventory item for each weapon and side; replaces the previous selection. A weapon may carry one item
+   * for T and a different one for CT, or a single item for BOTH sides (never BOTH together with a per-side item).
+   */
+  async setItems(userId: string, id: string, items: Array<{ inventoryItemId: string; team?: 'BOTH' | 'T' | 'CT' }>) {
     await this.load(userId, id);
     const ids = items.map((i) => i.inventoryItemId);
     if (new Set(ids).size !== ids.length) throw badRequest('DUPLICATE_ITEM', 'An inventory item can only be used once per loadout');
     const owned = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, ownerId: userId } });
     if (owned.length !== ids.length) throw notFound('INVENTORY_ITEM_NOT_FOUND', 'One of the items is not in your inventory');
-    const weapons = owned.map((o) => o.weaponDefIndex);
-    if (new Set(weapons).size !== weapons.length) throw badRequest('DUPLICATE_WEAPON', 'A loadout holds one item per weapon');
+    const byId = new Map(owned.map((o) => [o.id, o] as const));
+    const rows = items.map((i) => ({ loadoutId: id, inventoryItemId: i.inventoryItemId, weaponDefIndex: byId.get(i.inventoryItemId)!.weaponDefIndex, team: i.team ?? ('BOTH' as const) }));
+    this.assertTeamSlots(rows);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.loadoutItem.deleteMany({ where: { loadoutId: id } });
-      await tx.loadoutItem.createMany({ data: owned.map((o) => ({ loadoutId: id, inventoryItemId: o.id, weaponDefIndex: o.weaponDefIndex })) });
+      await tx.loadoutItem.createMany({ data: rows });
     });
     return view(await this.load(userId, id));
+  }
+
+  /** One item per weapon and side; BOTH cannot coexist with T or CT for the same weapon. */
+  private assertTeamSlots(rows: ReadonlyArray<{ weaponDefIndex: number; team: 'BOTH' | 'T' | 'CT' }>): void {
+    const sides = new Map<number, Set<string>>();
+    for (const r of rows) {
+      const set = sides.get(r.weaponDefIndex) ?? new Set<string>();
+      if (set.has(r.team)) throw badRequest('DUPLICATE_WEAPON', 'A loadout holds one item per weapon and side');
+      set.add(r.team);
+      sides.set(r.weaponDefIndex, set);
+    }
+    for (const set of sides.values()) {
+      if (set.has('BOTH') && set.size > 1) throw badRequest('TEAM_CONFLICT', 'A weapon is either equipped for both sides or per side, not both');
+    }
   }
 
   /** The active loadout is the one a server applies; exactly one at most (database enforced). */
@@ -148,7 +166,7 @@ export class LoadoutsService {
     if (used + source.items.length > inventoryMax) throw conflict('INVENTORY_FULL', `Importing needs ${source.items.length} free inventory slots (you have ${inventoryMax - used})`);
 
     const loadout = await this.createRow(userId, (name ?? source.name).slice(0, 40), false);
-    const restricted = await this.copyItems(userId, loadout.id, source.items.map((i) => i.inventoryItem as never));
+    const restricted = await this.copyItems(userId, loadout.id, source.items.map((i) => ({ source: i.inventoryItem as never, team: i.team })));
     return { loadout: view(await this.load(userId, loadout.id)), restricted };
   }
 
@@ -159,9 +177,10 @@ export class LoadoutsService {
       format: 'celtist-loadout',
       version: 1,
       name: loadout.name,
-      items: loadout.items.map(({ inventoryItem: i }) => ({
+      items: loadout.items.map(({ inventoryItem: i, team }) => ({
         slot: i.slot,
         weaponDefIndex: i.weaponDefIndex,
+        team,
         paintIndex: i.skin?.paintIndex ?? null,
         floatValue: i.floatValue,
         paintSeed: i.paintSeed,
@@ -181,7 +200,7 @@ export class LoadoutsService {
     const loadout = await this.createRow(userId, data.name, false);
 
     const skipped: Array<{ weaponDefIndex: number; reason: string }> = [];
-    const created: Array<{ id: string; weaponDefIndex: number }> = [];
+    const created: Array<{ id: string; weaponDefIndex: number; team: 'BOTH' | 'T' | 'CT' }> = [];
     for (const item of data.items) {
       const skin = item.paintIndex === null ? null : await this.prisma.skin.findUnique({ where: { weaponDefIndex_paintIndex: { weaponDefIndex: item.weaponDefIndex, paintIndex: item.paintIndex } } });
       if (item.paintIndex !== null && !skin) {
@@ -205,11 +224,19 @@ export class LoadoutsService {
           stickers: { create: item.stickers.filter((s) => byDef.has(s.stickerDefIndex)).map((s) => ({ stickerId: byDef.get(s.stickerDefIndex)!, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX ?? null, offsetY: s.offsetY ?? null, rotation: s.rotation ?? null, scale: s.scale ?? null })) },
         },
       });
-      created.push({ id: row.id, weaponDefIndex: row.weaponDefIndex });
+      created.push({ id: row.id, weaponDefIndex: row.weaponDefIndex, team: item.team });
     }
-    const seen = new Set<number>();
-    const unique = created.filter((c) => (seen.has(c.weaponDefIndex) ? false : (seen.add(c.weaponDefIndex), true)));
-    await this.prisma.loadoutItem.createMany({ data: unique.map((c) => ({ loadoutId: loadout.id, inventoryItemId: c.id, weaponDefIndex: c.weaponDefIndex })) });
+    // keep the first item per weapon and side; an entry for BOTH sides wins over per-side entries of the same weapon
+    const bothWeapons = new Set(created.filter((c) => c.team === 'BOTH').map((c) => c.weaponDefIndex));
+    const seen = new Set<string>();
+    const unique = created.filter((c) => {
+      if (c.team !== 'BOTH' && bothWeapons.has(c.weaponDefIndex)) return false;
+      const key = `${c.weaponDefIndex}:${c.team}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    await this.prisma.loadoutItem.createMany({ data: unique.map((c) => ({ loadoutId: loadout.id, inventoryItemId: c.id, weaponDefIndex: c.weaponDefIndex, team: c.team })) });
     return { loadout: view(await this.load(userId, loadout.id)), skipped };
   }
 
@@ -226,16 +253,24 @@ export class LoadoutsService {
     const permission = await this.permissions.effectiveFor(user.id);
     if (!loadout) return { level: permission.level, items: [], skipped: [] };
 
-    const rows = loadout.items.map((i) => i.inventoryItem);
-    const infos = await this.skins.infoFor(rows.flatMap((r) => (r.skinId ? [r.skinId] : [])));
+    const infos = await this.skins.infoFor(loadout.items.flatMap((i) => (i.inventoryItem.skinId ? [i.inventoryItem.skinId] : [])));
     const thresholds = await this.settings.get('skin.thresholds');
-    const applied = resolveLoadoutForApplication(rows.map((r) => toRuleItem(r as never)), { skins: infos, permission, thresholds });
-    const byWeapon = new Map(rows.map((r) => [r.weaponDefIndex, r] as const));
-    return {
-      level: permission.level,
-      items: applied.items.map((it) => {
+
+    // Resolve each side on its own: the same weapon may carry different skins for T and CT. An item equipped for BOTH
+    // counts for each side unless that side has an item of its own.
+    const items: Array<Record<string, unknown>> = [];
+    const skipped: Array<{ team: string; weaponDefIndex: number; reasons: string[] }> = [];
+    for (const side of ['T', 'CT'] as const) {
+      const chosen = new Map<number, (typeof loadout.items)[number]>();
+      for (const li of loadout.items) if (li.team === 'BOTH') chosen.set(li.weaponDefIndex, li);
+      for (const li of loadout.items) if (li.team === side) chosen.set(li.weaponDefIndex, li);
+      const rows = [...chosen.values()];
+      const applied = resolveLoadoutForApplication(rows.map((r) => toRuleItem(r.inventoryItem as never)), { skins: infos, permission, thresholds });
+      const byWeapon = new Map(rows.map((r) => [r.weaponDefIndex, r.inventoryItem] as const));
+      for (const it of applied.items) {
         const row = byWeapon.get(it.weaponDefIndex)!;
-        return {
+        items.push({
+          team: side,
           weaponDefIndex: it.weaponDefIndex,
           slot: it.slot,
           paintIndex: row.skin?.paintIndex ?? 0,
@@ -245,11 +280,12 @@ export class LoadoutsService {
           statTrakCount: it.statTrakCount,
           souvenir: it.souvenir,
           nameTag: it.nameTag,
-          stickers: row.stickers.map((s) => ({ slot: s.slotIndex, defIndex: s.sticker.defIndex, wear: s.wear })),
-        };
-      }),
-      skipped: applied.skipped,
-    };
+          stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear })),
+        });
+      }
+      for (const sk of applied.skipped) skipped.push({ team: side, weaponDefIndex: sk.weaponDefIndex, reasons: sk.reasons as string[] });
+    }
+    return { level: permission.level, items, skipped };
   }
 
   // ─────────────── internals ───────────────
@@ -280,12 +316,13 @@ export class LoadoutsService {
   }
 
   /** Copies someone else's inventory items into the importer's inventory; reports what the importer's level does not allow. */
-  private async copyItems(userId: string, loadoutId: string, sources: Array<Parameters<typeof toRuleItem>[0] & { skin: { id: string } | null }>) {
+  private async copyItems(userId: string, loadoutId: string, entries: Array<{ source: Parameters<typeof toRuleItem>[0] & { skin: { id: string } | null }; team: 'BOTH' | 'T' | 'CT' }>) {
+    const sources = entries.map((e) => e.source);
     const permission = await this.permissions.effectiveFor(userId);
     const infos = await this.skins.infoFor(sources.flatMap((s) => (s.skinId ? [s.skinId] : [])));
     const thresholds = await this.settings.get('skin.thresholds');
     const restricted: Array<{ weaponDefIndex: number; reasons: string[] }> = [];
-    for (const source of sources) {
+    for (const [index, source] of sources.entries()) {
       const item = source as unknown as { stickers: Array<{ sticker: { id: string }; slotIndex: number; wear: number; offsetX: number | null; offsetY: number | null; rotation: number | null; scale: number | null }> };
       const violations = checkLoadoutItem(toRuleItem(source), 0, { skins: infos, permission, thresholds });
       if (violations.length > 0) restricted.push({ weaponDefIndex: source.weaponDefIndex, reasons: violations.map((v) => v.code) });
@@ -304,7 +341,7 @@ export class LoadoutsService {
           stickers: { create: item.stickers.map((s) => ({ stickerId: s.sticker.id, slotIndex: s.slotIndex, wear: s.wear, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })) },
         },
       });
-      await this.prisma.loadoutItem.create({ data: { loadoutId, inventoryItemId: row.id, weaponDefIndex: row.weaponDefIndex } });
+      await this.prisma.loadoutItem.create({ data: { loadoutId, inventoryItemId: row.id, weaponDefIndex: row.weaponDefIndex, team: entries[index]!.team } });
     }
     return restricted;
   }

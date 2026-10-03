@@ -75,8 +75,9 @@ export const updateLoadoutSchema = z.object({
   visibility: z.enum(['PRIVATE', 'UNLISTED', 'PUBLIC']).optional(),
 });
 /** Which inventory item is used for which weapon in a loadout (one per weapon). */
+export const loadoutTeamSchema = z.enum(['BOTH', 'T', 'CT']);
 export const setLoadoutItemsSchema = z.object({
-  items: z.array(z.object({ inventoryItemId: z.uuid() })).max(40),
+  items: z.array(z.object({ inventoryItemId: z.uuid(), team: loadoutTeamSchema.default('BOTH') })).max(80),
 });
 export const importLoadoutCodeSchema = z.object({ code: z.string().trim().min(6).max(24), name: loadoutNameSchema.optional() });
 
@@ -90,6 +91,7 @@ export const loadoutExportSchema = z.object({
       z.object({
         slot: z.enum(LOADOUT_SLOTS),
         weaponDefIndex: z.number().int().positive(),
+        team: loadoutTeamSchema.default('BOTH'),
         paintIndex: z.number().int().min(0).nullable(),
         floatValue: floatSchema,
         paintSeed: paintSeedSchema,

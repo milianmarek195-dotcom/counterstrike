@@ -9,7 +9,7 @@ namespace Celtist.Tournament;
 
 public sealed partial class CeltistTournamentPlugin
 {
-    private sealed record SkinItem(string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag);
+    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
 
@@ -36,7 +36,7 @@ public sealed partial class CeltistTournamentPlugin
             var items = new List<SkinItem>();
             foreach (var i in json.GetProperty("items").EnumerateArray())
                 items.Add(new SkinItem(
-                    i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
+                    i.GetProperty("team").GetString() ?? "T", i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
                     (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(),
                     i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null));
             if (items.Count == 0) return;
@@ -113,12 +113,24 @@ public sealed partial class CeltistTournamentPlugin
     /// <summary>A SteamID64 is this base plus the 32-bit account id the game stores on weapons.</summary>
     private const ulong SteamId64Base = 76561197960265728UL;
 
+    /// <summary>
+    /// The backend delivers one entry per weapon and side (T / CT). Only the entries of the side the player is on right now
+    /// apply, so a weapon can carry a different skin on each side. Unknown side (spectator): nothing applies.
+    /// </summary>
+    private List<SkinItem> ForCurrentSide(ulong steamId, List<SkinItem> items)
+    {
+        var teamNum = Utilities.GetPlayerFromSteamId(steamId)?.TeamNum;
+        var side = teamNum == 2 ? "T" : teamNum == 3 ? "CT" : null;
+        return side is null ? new List<SkinItem>() : items.Where(i => i.Team == side).ToList();
+    }
+
     private static bool IsKnife(string? designerName) => designerName is not null && (designerName.Contains("knife", StringComparison.Ordinal) || designerName.Contains("bayonet", StringComparison.Ordinal));
 
-    private void ApplyToWeapon(CBasePlayerWeapon weapon, ulong steamId, List<SkinItem> items)
+    private void ApplyToWeapon(CBasePlayerWeapon weapon, ulong steamId, List<SkinItem> allItems)
     {
         try
         {
+            var items = ForCurrentSide(steamId, allItems);
             var econ = weapon.AttributeManager.Item;
             if (IsKnife(weapon.DesignerName))
             {
@@ -177,8 +189,8 @@ public sealed partial class CeltistTournamentPlugin
 
     private void ApplyGloves(ulong steamId)
     {
-        if (!_loadouts.TryGetValue(steamId, out var items)) return;
-        var item = items.FirstOrDefault(i => i.Slot == "GLOVES");
+        if (!_loadouts.TryGetValue(steamId, out var allItems)) return;
+        var item = ForCurrentSide(steamId, allItems).FirstOrDefault(i => i.Slot == "GLOVES");
         var player = Utilities.GetPlayerFromSteamId(steamId);
         if (item is null || !IsHuman(player) || !player!.PawnIsAlive) return;
         var pawn = player.PlayerPawn.Value;

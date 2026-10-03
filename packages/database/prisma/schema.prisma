@@ -188,6 +188,12 @@ enum LoadoutVisibility {
   PUBLIC
 }
 
+enum LoadoutTeam {
+  BOTH
+  T
+  CT
+}
+
 enum LoadoutSlot {
   KNIFE
   GLOVES
@@ -1264,11 +1270,13 @@ model LoadoutItem {
   loadoutId       String @db.Uuid
   inventoryItemId String @db.Uuid
   weaponDefIndex  Int
+  // Which side the item is equipped for. A weapon may have one item per side (T and CT), or one for BOTH.
+  team            LoadoutTeam @default(BOTH)
 
   loadout       Loadout       @relation(fields: [loadoutId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
-  @@unique([loadoutId, weaponDefIndex])
+  @@unique([loadoutId, weaponDefIndex, team])
   @@index([inventoryItemId])
   @@map("loadout_items")
 }
