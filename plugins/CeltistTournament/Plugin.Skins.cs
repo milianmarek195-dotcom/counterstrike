@@ -161,7 +161,11 @@ public sealed partial class CeltistTournamentPlugin
 
             var def = econ.ItemDefinitionIndex;
             var item = items.FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null) return;
+            if (item is null)
+            {
+                Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: no entry on this side ({Side} items: {Count})", weapon.DesignerName, def, steamId, Utilities.GetPlayerFromSteamId(steamId)?.TeamNum, items.Count);
+                return;
+            }
 
             econ.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
             econ.ItemIDLow = 16384 & 0xFFFFFFFF;
@@ -172,6 +176,7 @@ public sealed partial class CeltistTournamentPlugin
             weapon.FallbackWear = item.Float;
             weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+            Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon: {Message}", e.Message); }
     }
