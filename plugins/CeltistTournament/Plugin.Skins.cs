@@ -91,6 +91,8 @@ public sealed partial class CeltistTournamentPlugin
         // StatTrak needs the "strange" quality and the kill counter next to the fallback value
         if (item.StatTrak) econ.EntityQuality = 9;
         if (!EnsureAttributeSetter()) return;
+        // the paint also goes in as item attributes (like on knives): the kill feed and the "killed by" panel name the item from them
+        SetPaintAttributes(econ, item);
         foreach (var handle in new[] { econ.NetworkedDynamicAttributes.Handle, econ.AttributeList.Handle })
         {
             if (item.StatTrak)
