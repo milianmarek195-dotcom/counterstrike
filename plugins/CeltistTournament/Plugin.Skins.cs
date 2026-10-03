@@ -310,7 +310,7 @@ public sealed partial class CeltistTournamentPlugin
             // 2. a unique item of the player
             StampItemId(econ);
             econ.AccountID = (uint)steamId;
-            if (!string.IsNullOrEmpty(item.NameTag)) econ.CustomName = item.NameTag;
+            econ.CustomName = item.NameTag ?? string.Empty;
 
             // 3. finish: fallback fields + the paint attribute
             weapon.FallbackPaintKit = item.PaintIndex;
@@ -351,6 +351,7 @@ public sealed partial class CeltistTournamentPlugin
             // 4. a finish made for the old weapon model needs the old model: the "body" body group selects it
             weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
 
+            Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager"); // the name tag is part of the networked item
             _stamped[weapon.Index] = (econ.ItemID, signature);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
@@ -382,6 +383,7 @@ public sealed partial class CeltistTournamentPlugin
         weapon.FallbackSeed = item.Pattern;
         weapon.FallbackWear = item.Float;
         weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
+        econ.CustomName = item.NameTag ?? string.Empty;
         SetPaintAttributes(econ, item);
         Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
         weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
