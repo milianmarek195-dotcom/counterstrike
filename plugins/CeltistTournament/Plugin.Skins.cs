@@ -18,6 +18,8 @@ public sealed partial class CeltistTournamentPlugin
     // the first-person model is a separate entity from the weapon: changing its mesh group made the held skin disappear, so it stays off unless tested with !skindbg vm
     private bool _dbgViewModel;
     private bool _dbgRedeploy = true;
+    private bool _dbgUniqueId;   // true: unique item id like knives and gloves; false: the shared custom id 16384
+    private bool _dbgFallback = true; // fallback paint fields on the weapon entity
     private readonly Dictionary<ulong, string> _redeployed = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
@@ -288,14 +290,18 @@ public sealed partial class CeltistTournamentPlugin
                 return;
             }
 
-            econ.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
-            econ.ItemIDLow = 16384 & 0xFFFFFFFF;
-            econ.ItemIDHigh = 0;
+            if (_dbgUniqueId) StampItemId(econ);
+            else
+            {
+                econ.ItemID = 16384; // marks the econ item as custom so the fallback values below are used
+                econ.ItemIDLow = 16384 & 0xFFFFFFFF;
+                econ.ItemIDHigh = 0;
+            }
             econ.AccountID = (uint)steamId; // the item belongs to the player, otherwise the client ignores the fallback paint
-            weapon.FallbackPaintKit = item.PaintIndex;
-            weapon.FallbackSeed = item.Pattern;
-            weapon.FallbackWear = item.Float;
-            weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
+            weapon.FallbackPaintKit = _dbgFallback ? item.PaintIndex : 0;
+            weapon.FallbackSeed = _dbgFallback ? item.Pattern : 0;
+            weapon.FallbackWear = _dbgFallback ? item.Float : 0f;
+            weapon.FallbackStatTrak = _dbgFallback && item.StatTrak ? item.StatTrakCount : -1;
             ApplyExtras(econ, item);
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
             if (_dbgMesh) SetMeshMask(weapon, item.Legacy);

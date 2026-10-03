@@ -261,10 +261,21 @@ public sealed partial class CeltistTournamentPlugin
             case "extras": _dbgExtras = !_dbgExtras; break;
             case "vm": _dbgViewModel = !_dbgViewModel; break;
             case "redeploy": _dbgRedeploy = !_dbgRedeploy; _redeployed.Remove(player.SteamID); break;
-            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; _dbgViewModel = false; break;
+            case "v1": SetVariant(true, true, true, false, true); break;   // everything on (the default)
+            case "v2": SetVariant(true, true, true, true, true); break;    // + unique item id
+            case "v3": SetVariant(true, true, true, true, false); break;   // unique item id, attributes only (like knives)
+            case "v4": SetVariant(false, false, false, false, true); break; // shared id + fallback fields only (the first version)
+            case "v5": SetVariant(false, false, false, true, true); break;  // unique id + fallback fields only
+            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; _dbgViewModel = false; _dbgUniqueId = false; _dbgFallback = true; break;
         }
-        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} vm={_dbgViewModel} redeploy={_dbgRedeploy} - drop and pick up the weapon (or switch weapons) to see the effect");
+        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} vm={_dbgViewModel} redeploy={_dbgRedeploy} uid={_dbgUniqueId} fallback={_dbgFallback} - drop and pick up the weapon (or switch weapons) to see the effect");
+        _redeployed.Remove(player.SteamID);
         ApplyToHeldWeapons(player.SteamID);
+    }
+
+    private void SetVariant(bool paint, bool clear, bool mesh, bool uniqueId, bool fallback)
+    {
+        _dbgPaint = paint; _dbgClear = clear; _dbgMesh = mesh; _dbgUniqueId = uniqueId; _dbgFallback = fallback;
     }
 
     private void OnMeshCommand(CCSPlayerController? player, CommandInfo info)
