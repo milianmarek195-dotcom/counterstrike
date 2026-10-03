@@ -75,6 +75,10 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
 
     // ───────────── backend loops ─────────────
 
+    private readonly System.Diagnostics.Stopwatch _tickClock = System.Diagnostics.Stopwatch.StartNew();
+    private int _lastTicks;
+    private double _lastTickWall;
+
     private async Task SendHeartbeatAsync()
     {
         if (_api is null) return;
@@ -82,14 +86,23 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
         {
             var players = 0;
             string map = "";
+            var ticks = 0;
             var tcs = new TaskCompletionSource<bool>();
             Server.NextFrame(() =>
             {
                 players = Utilities.GetPlayers().Count(p => p is { IsBot: false, IsValid: true });
                 map = Server.MapName;
+                ticks = Server.TickCount;
                 tcs.SetResult(true);
             });
             await tcs.Task.ConfigureAwait(false);
+            // real tick rate: game ticks per wall-clock second since the previous heartbeat (64 expected; lower = slow motion)
+            var wall = _tickClock.Elapsed.TotalSeconds;
+            double tickrate = 0;
+            if (_lastTicks > 0 && wall - _lastTickWall > 1) tickrate = Math.Round((ticks - _lastTicks) / (wall - _lastTickWall), 1);
+            _lastTicks = ticks;
+            _lastTickWall = wall;
+            if (tickrate > 0 && tickrate < 55 && players > 0) Logger.LogWarning("[Celtist] server runs at {Rate} ticks/s (64 expected): players see slow motion", tickrate);
             var response = await _api.PostAsync("/server/v1/heartbeat", new
             {
                 status = _status,
@@ -97,7 +110,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
                 players,
                 version = ModuleVersion,
                 timestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                health = new { map, uptimeSeconds = (int)(DateTimeOffset.UtcNow - _startedAt).TotalSeconds },
+                health = new { map, tickrate, uptimeSeconds = (int)(DateTimeOffset.UtcNow - _startedAt).TotalSeconds },
             }).ConfigureAwait(false);
             if (!response.Ok) Logger.LogWarning("[Celtist] heartbeat rejected: HTTP {Status} {Body}", response.Status, response.Body);
             else if (_plan is null && response.Json().TryGetProperty("expectedMatchId", out var expected) && expected.ValueKind == JsonValueKind.String)

@@ -76,7 +76,13 @@ public sealed partial class CeltistTournamentPlugin
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect e, GameEventInfo info)
     {
         var player = e.Userid;
-        if (player is { IsBot: false, IsValid: true }) Emit("player.disconnected", new() { ["steamId"] = player.SteamID.ToString() });
+        if (player is { IsBot: false, IsValid: true })
+        {
+            Emit("player.disconnected", new() { ["steamId"] = player.SteamID.ToString() });
+            _skinTokens.Remove(player.SteamID);
+            _glovesApplied.Remove(player.SteamID);
+            _loadouts.Remove(player.SteamID);
+        }
         return HookResult.Continue;
     }
 
