@@ -19,7 +19,7 @@ const detailInclude = {
     },
   },
   maps: { include: { map: true }, orderBy: { mapNumber: 'asc' } },
-  server: { select: { id: true, name: true, ip: true, port: true, region: true } },
+  server: { select: { id: true, name: true, ip: true, port: true, region: true, status: true, currentMatchId: true, lastHeartbeatAt: true } },
   tournamentMatch: { include: { tournament: { select: { id: true, name: true } } } },
   controller: { select: { id: true, displayName: true } },
   // Players in the lobby that are not on a team yet.
@@ -167,6 +167,16 @@ export class MatchesService {
     const showServer =
       !!match.server && !!viewer && (isParticipant || canControl || viewer.canSeeServer) && ['LOBBY', 'VETO', 'MAP_FORCED', 'CONFIGURING', 'LIVE', 'SERVER_ERROR'].includes(match.status);
 
+    // "Connect" is offered only when everything is set up: map decided, everybody in a team, server prepared for this very match and alive.
+    const notReady: string[] = [];
+    if (match.server) {
+      if (!['LOBBY', 'MAP_FORCED', 'CONFIGURING', 'LIVE'].includes(match.status)) notReady.push(match.status === 'VETO' ? 'Die Map-Auswahl läuft noch' : 'Das Match ist gerade nicht spielbereit');
+      if (match.maps.length === 0) notReady.push('Die Map ist noch nicht festgelegt');
+      if (match.players.length > 0) notReady.push('Nicht alle Spieler sind einem Team zugewiesen');
+      if (match.server.currentMatchId !== match.id || match.server.status !== 'IN_USE') notReady.push('Der Server wird noch eingerichtet');
+      if (!match.server.lastHeartbeatAt || Date.now() - match.server.lastHeartbeatAt.getTime() > 30_000) notReady.push('Der Server antwortet nicht');
+    }
+
     const playerView = (p: { userId: string; user: { steamId: string; displayName: string; avatarUrl: string | null }; isCaptain: boolean; isSubstitute: boolean; connectedAt: Date | null; removedAt: Date | null; eloDelta: number | null }) => {
       const elo = eloOf.get(p.userId) ?? null;
       const tier = elo === null ? null : tiers.filter((t) => t.minElo <= elo).at(-1) ?? null;
@@ -229,7 +239,7 @@ export class MatchesService {
         scoreB: m.scoreB,
         winnerSlot: m.winnerSlot,
       })),
-      server: showServer ? { name: match.server!.name, region: match.server!.region, address: `${match.server!.ip}:${match.server!.port}`, connect: `steam://connect/${match.server!.ip}:${match.server!.port}` } : null,
+      server: showServer ? { name: match.server!.name, region: match.server!.region, address: `${match.server!.ip}:${match.server!.port}`, connect: `steam://connect/${match.server!.ip}:${match.server!.port}`, ready: notReady.length === 0, notReady } : null,
       viewer: viewer
         ? {
             isParticipant,

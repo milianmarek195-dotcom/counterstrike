@@ -13,7 +13,7 @@ interface MatchView {
   controller: { displayName: string } | null; tournament: { id: string; name: string } | null;
   teams: { A: Team; B: Team }; unassigned: Player[];
   maps: Array<{ mapNumber: number; status: string; scoreA: number; scoreB: number; map: { id: string; name: string } }>;
-  server: { name: string; address: string; connect: string } | null;
+  server: { name: string; address: string; connect: string; ready?: boolean; notReady?: string[] } | null;
   viewer: { canControl: boolean; role: string | null; slot: 'A' | 'B' | null } | null;
 }
 interface Veto { complete: boolean; startsWith: 'A' | 'B'; deadline?: string | null; current: { stepIndex: number; team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string; imageUrl?: string | null }>; steps: Array<{ index: number; action: string; team: string | null }>; actions: Array<{ team: string; action: string; map: { id?: string; name: string; imageUrl?: string | null } | null; side: string | null }> }
@@ -26,6 +26,13 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   const board = useApi<{ total: Row[] }>(m.data && ['LIVE', 'FINISHED'].includes(m.data.status) ? `/matches/${id}/scoreboard` : null);
   const reloadAll = () => { m.reload(); veto.reload(); board.reload(); };
   useRealtime('match', id, reloadAll);
+  // the server preparing itself is not announced as a match event: while "connect" is locked, look again every few seconds
+  const notReady = m.data?.server?.ready === false;
+  useEffect(() => {
+    if (!notReady) return;
+    const t = setInterval(() => m.reload(), 4000);
+    return () => clearInterval(t);
+  }, [notReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (m.loading && !m.data) return <Loading />;
   if (m.error) return <ErrorBox message={m.error.message} />;
@@ -43,7 +50,12 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       {v.server && (
         <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 border-primary/50">
           <div><div className="text-sm text-muted">Server</div><div className="font-semibold">{v.server.name} · {v.server.address}</div></div>
-          <a href={v.server.connect} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-fg hover:opacity-90">MIT SERVER VERBINDEN</a>
+          {v.server.ready !== false ? (
+            <a href={v.server.connect} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-fg hover:opacity-90">MIT SERVER VERBINDEN</a>
+          ) : (
+            <div className="text-right"><button disabled className="cursor-not-allowed rounded-lg bg-primary/30 px-4 py-2 text-sm font-bold text-primary-fg/60">MIT SERVER VERBINDEN</button>
+              <ul className="mt-1 text-xs text-muted">{v.server.notReady?.map((r) => <li key={r}>• {r}</li>)}</ul></div>
+          )}
         </Card>
       )}
 

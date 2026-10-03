@@ -13,7 +13,7 @@ public sealed partial class CeltistTournamentPlugin
     private readonly Dictionary<string, int> _pausesUsed = new() { ["A"] = 0, ["B"] = 0 };
     private bool _paused;
     private int _pauseToken;
-    private bool _penaltiesEnabled = true;
+    private bool _penaltiesEnabled = false; // no removals for team damage unless an admin toggles it with !nobans
 
     // ───────────── commands from the backend (executed on the game thread) ─────────────
 

@@ -65,6 +65,8 @@ export const SETTINGS = {
   'match.pauseMaxSeconds': { schema: z.number().int().min(30).max(900), default: 180 },
   /** Team-damage penalty inside a match (never touches Valve's own cooldowns): kills / damage before removal. */
   'match.teamKillLimit': { schema: z.number().int().min(0).max(20), default: 3 },
+  /** Match bans for team damage / team kills. Off: nobody is removed or banned for hurting teammates. */
+  'match.teamDamageBans': { schema: z.boolean(), default: false },
   'match.teamDamageLimit': { schema: z.number().int().min(0).max(5000), default: 600 },
   'matchmaking.config': { schema: matchmakingSchema, default: { baseWindow: 100, expandStep: 50, expandEverySeconds: 15, maxWindow: 400 } },
   'tournament.maxActivePerAdmin': { schema: z.number().int().min(1).max(100), default: 20 },

@@ -2,6 +2,7 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { Injectable, Logger } from '@nestjs/common';
 import { isUniqueViolation } from '@celtist/database';
 import type { ServerEventPayload } from '@celtist/shared';
+import { SettingsService } from '../settings/settings.service.js';
 import { Clock } from '../common/clock.js';
 import { DomainEvent, type MatchEventPayload } from '../common/domain-events.js';
 import { PrismaService } from '../database/prisma.service.js';
@@ -20,6 +21,7 @@ export class ServerEventsService {
     private readonly allocator: ServerAllocator,
     private readonly lifecycle: MatchLifecycleService,
     private readonly events: EventEmitter2,
+    private readonly settings: SettingsService,
   ) {}
 
   /** Stores each event once (idempotency key) and applies its effect. Returns how many were new. */
@@ -137,6 +139,7 @@ export class ServerEventsService {
   }
 
   private async teamDamagePenalty(matchId: string, steamId: string, reason: string): Promise<void> {
+    if (!(await this.settings.get('match.teamDamageBans'))) return; // team damage never costs a player the match unless an admin switched this on
     const player = await this.prisma.matchPlayer.findFirst({ where: { matchId, steamId } });
     if (!player) return;
     const existing = await this.prisma.ban.findFirst({ where: { userId: player.userId, matchId, type: 'MATCH', revokedAt: null } });
