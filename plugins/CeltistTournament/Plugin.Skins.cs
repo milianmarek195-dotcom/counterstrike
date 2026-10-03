@@ -12,6 +12,25 @@ public sealed partial class CeltistTournamentPlugin
     private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
+    private readonly Dictionary<ulong, int> _skinTokens = new();
+    private readonly Dictionary<ulong, string> _glovesApplied = new();
+
+    /// <summary>
+    /// Applies the loadout once, shortly after the last trigger (spawn, team change): several triggers in a row used to run
+    /// the glove/knife swap on top of each other, which garbled the first-person models.
+    /// </summary>
+    private void ScheduleSkins(ulong steamId, float delay)
+    {
+        var token = _skinTokens.GetValueOrDefault(steamId) + 1;
+        _skinTokens[steamId] = token;
+        AddTimer(delay, () =>
+        {
+            if (_skinTokens.GetValueOrDefault(steamId) != token) return;
+            if (Config.AgentsEnabled) ApplyAgent(steamId);
+            ApplyToHeldWeapons(steamId);
+            ApplyGloves(steamId);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
 
     // Econ attributes are set through the game's own function (located by signature, see gamedata/celtist.json).
     // The signature has to be re-checked after big CS2 updates; if it cannot be resolved, knives and gloves stay default.
@@ -230,6 +249,10 @@ public sealed partial class CeltistTournamentPlugin
         if (item is null || !IsHuman(player) || !player!.PawnIsAlive) return;
         var pawn = player.PlayerPawn.Value;
         if (pawn is null || !pawn.IsValid) return;
+
+        var key = $"{pawn.Index}:{item.WeaponDefIndex}:{item.PaintIndex}:{item.Pattern}";
+        if (_glovesApplied.TryGetValue(steamId, out var done) && done == key) return; // already wearing exactly these
+        _glovesApplied[steamId] = key;
 
         Logger.LogInformation("[Celtist] gloves for {Steam}: def {Def}, paint {Paint}", steamId, item.WeaponDefIndex, item.PaintIndex);
         var gloves = pawn.EconGloves;

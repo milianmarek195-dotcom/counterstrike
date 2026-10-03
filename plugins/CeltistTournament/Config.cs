@@ -27,5 +27,7 @@ public sealed class PluginConfig : BasePluginConfig
     [JsonPropertyName("DenyMessage")] public string DenyMessage { get; set; } = "ACCESS DENIED - you are not assigned to this match";
 
     /// <summary>Skin module. Off by default: enable only after testing on your server build (see docs/SKIN_SYSTEM.md).</summary>
+    /// <summary>Agent (player model) switching. Off by default until it is verified on the server.</summary>
+    [JsonPropertyName("AgentsEnabled")] public bool AgentsEnabled { get; set; } = false;
     [JsonPropertyName("SkinsEnabled")] public bool SkinsEnabled { get; set; } = false;
 }
