@@ -25,7 +25,7 @@ const variants: Record<Variant, string> = {
   danger: 'bg-danger text-white hover:brightness-110',
   ghost: 'hover:bg-card-hover',
 };
-const base = 'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-display text-[15px] font-bold uppercase tracking-wider transition disabled:cursor-not-allowed disabled:opacity-50';
+const base = 'inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-4 py-2 font-display text-[15px] font-bold uppercase tracking-wider transition disabled:cursor-not-allowed disabled:opacity-50';
 export function Button({ variant = 'primary', className, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return <button {...p} className={cn(base, variants[variant], className)} />;
 }

@@ -39,13 +39,13 @@ export function Nav() {
   const active = (href: string) => (href === '/' ? path === '/' : path === href || (href !== '/profile/loadouts' && path.startsWith(`${href}/`)));
   return (
     <header className="sticky top-0 z-40 border-b bg-elevated/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-5 px-4">
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-3 sm:gap-5 sm:px-4">
         <Link href="/" aria-label="Celtist Startseite"><Logo /></Link>
-        <nav aria-label="Hauptnavigation" className={cn('absolute left-0 top-16 w-full flex-col border-b bg-elevated p-2 md:static md:flex md:h-16 md:w-auto md:flex-row md:items-stretch md:border-0 md:bg-transparent md:p-0', open ? 'flex' : 'hidden md:flex')}>
+        <nav aria-label="Hauptnavigation" className={cn('absolute left-0 top-16 w-full flex-col border-b bg-elevated p-2 lg:static lg:flex lg:h-16 lg:w-auto lg:flex-row lg:items-stretch lg:border-0 lg:bg-transparent lg:p-0', open ? 'flex' : 'hidden lg:flex')}>
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className={cn('relative flex items-center px-3 font-display text-[15px] font-bold uppercase tracking-wider text-muted transition-colors hover:text-fg max-md:py-3', active(l.href) && 'text-fg after:absolute after:inset-x-3 after:bottom-0 after:h-[3px] after:bg-primary max-md:after:hidden max-md:text-primary')}>{l.label}</Link>
+            <Link key={l.href} href={l.href} className={cn('relative flex items-center px-3 font-display text-[15px] font-bold whitespace-nowrap uppercase tracking-wider text-muted transition-colors hover:text-fg max-lg:py-3', active(l.href) && 'text-fg after:absolute after:inset-x-3 after:bottom-0 after:h-[3px] after:bg-primary max-lg:after:hidden max-lg:text-primary')}>{l.label}</Link>
           ))}
-          {can('admin.access') && <Link href="/admin" className={cn('flex items-center px-3 font-display text-[15px] font-bold uppercase tracking-wider text-primary hover:opacity-80 max-md:py-3', path.startsWith('/admin') && 'underline')}>Admin</Link>}
+          {can('admin.access') && <Link href="/admin" className={cn('flex items-center px-3 font-display text-[15px] font-bold uppercase tracking-wider text-primary hover:opacity-80 max-lg:py-3', path.startsWith('/admin') && 'underline')}>Admin</Link>}
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={toggle} aria-label="Farbschema wechseln" className="rounded-md p-2 text-muted hover:bg-card-hover hover:text-fg">{light ? <Moon size={18} /> : <Sun size={18} />}</button>
@@ -55,12 +55,12 @@ export function Nav() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">{me.user.displayName.slice(0, 1).toUpperCase()}</span>
                 {me.user.displayName}
               </Link>
-              <Button variant="secondary" onClick={() => void logout()}>Abmelden</Button>
+              <Button variant="secondary" className="whitespace-nowrap px-3 sm:px-4" onClick={() => void logout()}>Abmelden</Button>
             </>
           ) : (
-            <Button onClick={() => login(path)}>Mit Steam anmelden</Button>
+            <Button className="whitespace-nowrap px-3 sm:px-4" onClick={() => login(path)}><span className="sm:hidden">Login</span><span className="hidden sm:inline">Mit Steam anmelden</span></Button>
           ))}
-          <button className="rounded-md p-2 hover:bg-card-hover md:hidden" aria-label="Menü" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={20} /> : <Menu size={20} />}</button>
+          <button className="rounded-md p-2 hover:bg-card-hover lg:hidden" aria-label="Menü" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </div>
     </header>

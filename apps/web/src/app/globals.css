@@ -57,6 +57,7 @@
 
 html { color-scheme: dark; }
 html[data-theme='light'] { color-scheme: light; }
+html, body { overflow-x: clip; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 * { border-color: var(--border); }
 
