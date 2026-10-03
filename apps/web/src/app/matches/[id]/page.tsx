@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { Button, Card, Empty, ErrorBox, Input, Loading, PageTitle, RankBadge, Select, StatusBadge, Table } from '@/components/ui';
 import { api, useAction, useApi } from '@/lib/api';
 import { fmtDate, fmtNum } from '@/lib/format';
@@ -16,7 +16,7 @@ interface MatchView {
   server: { name: string; address: string; connect: string } | null;
   viewer: { canControl: boolean; role: string | null; slot: 'A' | 'B' | null } | null;
 }
-interface Veto { complete: boolean; current: { team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string }>; actions: Array<{ team: string; action: string; map: { name: string } | null; side: string | null }> }
+interface Veto { complete: boolean; startsWith: 'A' | 'B'; deadline?: string | null; current: { stepIndex: number; team: 'A' | 'B'; action: string } | null; remaining: Array<{ id: string; name: string }>; steps: Array<{ index: number; action: string; team: string | null }>; actions: Array<{ team: string; action: string; map: { id?: string; name: string } | null; side: string | null }> }
 interface Row { steamId: string; displayName: string; team: string; kills: number; deaths: number; assists: number; kd: number; adr: number; hsPercent: number; mvps: number; killsAwp: number; killsAk47: number; killsPistol: number }
 
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
@@ -84,20 +84,86 @@ function TeamCard({ team }: { team: Team }) {
   );
 }
 
+function useSecondsLeft(deadline: string | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
+  return deadline ? Math.max(0, Math.ceil((new Date(deadline).getTime() - now) / 1000)) : null;
+}
+
+/** HLTV/ESL-style veto: team banners, step track, map cards that show who banned / picked what, side choice, countdown. */
 function VetoPanel({ matchId, veto, match, reload }: { matchId: string; veto: Veto; match: MatchView; reload: () => void }) {
   const act = useAction(reload);
   const cur = veto.current;
-  const mine = cur && (match.viewer?.slot === cur.team || match.viewer?.canControl);
+  const left = useSecondsLeft(veto.deadline ?? null);
+  const mine = !!cur && (match.viewer?.slot === cur.team || !!match.viewer?.canControl);
+  const teamName = (slot: string | null) => (slot === 'A' || slot === 'B' ? match.teams[slot].name : '–');
+  const verb: Record<string, string> = { BAN: 'bannt', PICK: 'pickt', SIDE: 'wählt die Seite', DECIDER: 'Decider' };
+  const stepText: Record<string, string> = { BAN: 'Ban', PICK: 'Pick', SIDE: 'Seite', DECIDER: 'Decider' };
+
+  // all maps of the pool: still available + already used by a step
+  const used = new Map<string, { team: string | null; action: string; side: string | null; name: string }>();
+  for (const x of veto.actions) {
+    if (!x.map || !x.map.id) continue;
+    const prev = used.get(x.map.id);
+    if (x.action === 'SIDE') { if (prev) prev.side = x.side; continue; }
+    used.set(x.map.id, { team: x.team, action: x.action, side: x.side, name: x.map.name });
+  }
+  const cards = [
+    ...veto.remaining.map((r) => ({ id: r.id, name: r.name, state: null as null | { team: string | null; action: string; side: string | null } })),
+    ...[...used.entries()].map(([id, u]) => ({ id, name: u.name, state: u })),
+  ];
+  const choosing = mine && !!cur && cur.action !== 'SIDE';
+
   return (
     <Card className="mb-6">
-      <h2 className="mb-2 font-bold">Map-Veto</h2>
-      {veto.actions.length > 0 && <p className="mb-2 text-xs text-muted">{veto.actions.map((a) => `${a.team}: ${a.action}${a.map ? ' ' + a.map.name : ''}${a.side ? ' ' + a.side : ''}`).join(' → ')}</p>}
-      {cur ? <p className="mb-3 text-sm">Team <b>{cur.team}</b> ist dran: <b>{cur.action}</b></p> : <p className="text-sm text-muted">Das Veto hat noch nicht begonnen.</p>}
-      {mine && cur && cur.action !== 'SIDE' && (
-        <div className="flex flex-wrap gap-2">{veto.remaining.map((r) => <Button key={r.id} variant="secondary" disabled={act.busy} onClick={() => void act.run(() => api(`/matches/${matchId}/veto`, { method: 'POST', body: { action: cur.action, mapId: r.id } }))}>{r.name}</Button>)}</div>
-      )}
+      <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {(['A', 'B'] as const).map((slot, i) => (
+          <div key={slot} className={`${i === 1 ? 'order-3 text-right' : ''} rounded-md border-l-4 px-3 py-2 ${cur?.team === slot ? 'border-primary bg-primary/10' : 'border-transparent bg-card-hover'}`}>
+            <div className="font-display text-lg font-bold uppercase leading-none">{match.teams[slot].name}</div>
+            <div className="mt-1 text-xs text-muted">{cur?.team === slot ? (match.viewer?.slot === slot ? 'Du bist dran' : 'ist dran') : veto.startsWith === slot ? 'beginnt' : 'wartet'}</div>
+          </div>
+        ))}
+        <div className="order-2 text-center">
+          <div className="font-display text-xs uppercase tracking-widest text-muted">Map-Veto · BO{match.bestOf}</div>
+          {left !== null && !veto.complete && <div className={`font-display text-3xl font-bold tabular-nums ${left <= 10 ? 'text-primary' : ''}`}>{left}s</div>}
+        </div>
+      </div>
+
+      <ol className="mb-4 flex flex-wrap gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+        {veto.steps.map((st) => {
+          const done = st.index < (cur?.stepIndex ?? 1e9);
+          const active = cur?.stepIndex === st.index;
+          return <li key={st.index} className={`rounded px-2 py-1 ${active ? 'bg-primary text-primary-fg' : done ? 'bg-card-hover text-muted line-through' : 'border text-muted'}`}>{stepText[st.action]}{st.team ? ' ' + teamName(st.team).slice(0, 10) : ''}</li>;
+        })}
+      </ol>
+
+      {cur ? (
+        <p className="mb-3 text-sm"><b>{teamName(cur.team)}</b> {verb[cur.action]}{cur.action === 'SIDE' ? ' (CT oder T)' : cur.action !== 'DECIDER' ? ' – wähle eine Map' : ''}.</p>
+      ) : <p className="mb-3 text-sm text-muted">Das Veto hat noch nicht begonnen.</p>}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {cards.map((c) => {
+          const st = c.state;
+          const banned = st?.action === 'BAN';
+          const picked = st?.action === 'PICK' || st?.action === 'DECIDER';
+          const clickable = choosing && !st && !act.busy;
+          return (
+            <button key={c.id} disabled={!clickable} onClick={() => cur && void act.run(() => api(`/matches/${matchId}/veto`, { method: 'POST', body: { action: cur.action, mapId: c.id } }))}
+              className={`stripes relative flex h-24 flex-col justify-end overflow-hidden rounded-lg border p-3 text-left transition ${picked ? 'border-primary ring-2 ring-primary' : ''} ${banned ? 'opacity-45 grayscale' : ''} ${clickable ? 'cursor-pointer hover:border-primary hover:brightness-125' : 'cursor-default'}`}>
+              <span className={`font-display text-xl font-bold uppercase leading-none ${banned ? 'line-through' : ''}`}>{c.name}</span>
+              <span className="mt-1 text-[11px] uppercase tracking-wide text-muted">
+                {!st ? (clickable ? (cur?.action === 'BAN' ? 'Klicken zum Bannen' : 'Klicken zum Picken') : 'Verfügbar') : banned ? `Ban · ${teamName(st.team)}` : st.action === 'DECIDER' ? `Decider${st.side ? ' · ' + st.side : ''}` : `Pick · ${teamName(st.team)}${st.side ? ' · Gegner: ' + st.side : ''}`}
+              </span>
+              {picked && <span className="absolute right-2 top-2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-fg">{st.action === 'DECIDER' ? 'DECIDER' : 'PICK'}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {mine && cur?.action === 'SIDE' && (
-        <div className="flex gap-2">{['CT', 'T'].map((s) => <Button key={s} variant="secondary" onClick={() => void act.run(() => api(`/matches/${matchId}/veto`, { method: 'POST', body: { action: 'SIDE', side: s } }))}>{s}</Button>)}</div>
+        <div className="mt-4 flex items-center gap-3"><span className="text-sm">Startseite:</span>
+          {(['CT', 'T'] as const).map((sd) => <Button key={sd} disabled={act.busy} onClick={() => void act.run(() => api(`/matches/${matchId}/veto`, { method: 'POST', body: { action: 'SIDE', side: sd } }))}>{sd === 'CT' ? 'Counter-Terrorist' : 'Terrorist'}</Button>)}
+        </div>
       )}
       {act.error && <div className="mt-2"><ErrorBox message={act.error} /></div>}
     </Card>

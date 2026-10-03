@@ -15,6 +15,7 @@ export const DEFAULT_MAPS: readonly DefaultMapDefinition[] = [
   { key: 'de_anubis', name: 'Anubis', modes: ['FIVE_V_FIVE'] },
   { key: 'de_overpass', name: 'Overpass', modes: ['FIVE_V_FIVE', 'WINGMAN'] },
   { key: 'de_dust2', name: 'Dust2', modes: ['FIVE_V_FIVE'] },
+  { key: 'de_cache', name: 'Cache', modes: ['FIVE_V_FIVE'] },
   { key: 'de_vertigo', name: 'Vertigo', modes: ['FIVE_V_FIVE', 'WINGMAN'] },
 ];
 
