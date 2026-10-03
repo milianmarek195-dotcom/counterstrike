@@ -37,10 +37,17 @@ export const SETTINGS = {
   'elo.rateForfeits': { schema: z.boolean(), default: false },
   'skin.thresholds': { schema: skinThresholdsSchema, default: { ...DEFAULT_SKIN_LEVEL_THRESHOLDS } },
   'skin.defaultLevel': { schema: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]), default: 0 as 0 | 1 | 2 | 3 },
+  /** Skin access every new account gets at its first login (and existing accounts that never had any). */
+  'skin.welcomeGrant': {
+    schema: z.object({ enabled: z.boolean(), level: z.number().int().min(0).max(3), days: z.number().int().min(1).max(3650), floatEditing: z.boolean(), stickerCrafts: z.boolean() }),
+    default: { enabled: true, level: 2, days: 60, floatEditing: true, stickerCrafts: false },
+  },
   /** Hard cap of three loadouts per player; admins may lower it but never raise it above 3. */
   'skin.maxLoadoutsPerUser': { schema: z.number().int().min(1).max(3), default: 3 },
   'skin.maxInventoryItems': { schema: z.number().int().min(1).max(500), default: 100 },
   'veto.stepTimeoutSeconds': { schema: z.number().int().min(10).max(600), default: 60 },
+  /** A match never runs longer than this (minutes, 0 = no limit): party matches are ended, tournament matches decided by the score. */
+  'match.maxDurationMinutes': { schema: z.number().int().min(0).max(600), default: 90 },
   /** Pauses each team may call per match and the longest a pause may last (plugin enforces, backend stores). */
   'match.pausesPerTeam': { schema: z.number().int().min(0).max(10), default: 2 },
   'match.pauseMaxSeconds': { schema: z.number().int().min(30).max(900), default: 180 },

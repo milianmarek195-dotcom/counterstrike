@@ -10,6 +10,7 @@ import { MatchAccessService, MatchControlService } from './match-control.service
 import { MatchFinalizerService } from './match-finalizer.service.js';
 import { MatchLifecycleService } from './match-lifecycle.service.js';
 import { MatchTicker } from './match-ticker.service.js';
+import { MatchTimeLimitService } from './match-time-limit.service.js';
 import { MatchVetoService } from './match-veto.service.js';
 import { AdminMatchesController, MatchControlController, MatchesController } from './matches.controller.js';
 import { MatchesService } from './matches.service.js';
@@ -31,6 +32,7 @@ import { MatchAutomationListener, ServerEventsService } from './server-events.se
     ServerEventsService,
     MatchAutomationListener,
     MatchTicker,
+    MatchTimeLimitService,
   ],
   exports: [MatchesService, MatchLifecycleService, MatchFinalizerService, MatchCommandService, MatchControlService, MatchAccessService, MatchTicker],
 })

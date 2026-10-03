@@ -50,8 +50,26 @@ export class UsersService {
 
     await this.ensureRankRows(user.id);
     await this.ensureOwnerRole(user.id, steamId);
+    await this.ensureWelcomeSkinGrant(user.id, displayName);
 
     return { id: user.id, steamId, displayName, avatarUrl, isNew: existing === null };
+  }
+
+  /**
+   * Welcome gift: a time-limited skin level for accounts that never had any skin permission (new accounts, and old
+   * ones the first time they sign in after the feature exists). Configurable and switchable in the platform settings.
+   */
+  async ensureWelcomeSkinGrant(userId: string, displayName: string): Promise<void> {
+    const cfg = await this.settings.get('skin.welcomeGrant');
+    if (!cfg.enabled || cfg.level <= 0) return;
+    if (await this.prisma.skinPermission.findFirst({ where: { userId }, select: { id: true } })) return;
+    const expiresAt = new Date(this.clock.nowMs() + cfg.days * 86_400_000);
+    await this.prisma.skinPermission.create({
+      data: { userId, level: cfg.level, floatEditing: cfg.floatEditing, stickerCrafts: cfg.stickerCrafts, customLoadouts: true, reason: 'Willkommensgeschenk', expiresAt },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorLabel: 'system', action: 'player.skin_level.set', targetType: 'user', targetId: userId, targetLabel: displayName, reason: 'Willkommensgeschenk', newValue: { level: cfg.level, days: cfg.days }, metadata: { via: 'welcome-grant' } },
+    });
   }
 
   /** One rank row and one stats row per game mode, created with the configured start Elo. */
