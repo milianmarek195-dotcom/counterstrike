@@ -42,6 +42,18 @@ export const SETTINGS = {
     schema: z.object({ enabled: z.boolean(), level: z.number().int().min(0).max(3), days: z.number().int().min(1).max(3650), floatEditing: z.boolean(), stickerCrafts: z.boolean() }),
     default: { enabled: true, level: 2, days: 60, floatEditing: true, stickerCrafts: false },
   },
+  /** Prize for the best fraggers of the winning team of a finished match (skin changer access for a while). Off by default. */
+  'match.topFraggerReward': {
+    schema: z.object({
+      enabled: z.boolean(),
+      topN: z.number().int().min(1).max(16),
+      level: z.number().int().min(1).max(3),
+      days: z.number().int().min(1).max(3650),
+      /** true = only tournament matches, false = every finished match that has a winner */
+      tournamentsOnly: z.boolean(),
+    }),
+    default: { enabled: false, topN: 3, level: 3, days: 7, tournamentsOnly: true },
+  },
   /** Hard cap of three loadouts per player; admins may lower it but never raise it above 3. */
   'skin.maxLoadoutsPerUser': { schema: z.number().int().min(1).max(3), default: 3 },
   'skin.maxInventoryItems': { schema: z.number().int().min(1).max(500), default: 100 },

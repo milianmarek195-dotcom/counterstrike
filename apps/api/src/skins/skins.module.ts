@@ -4,6 +4,7 @@ import { MatchesModule } from '../matches/matches.module.js';
 import { InventoryService } from './inventory.service.js';
 import { LoadoutsService } from './loadouts.service.js';
 import { SkinCatalogSource, SkinPriceProvider } from './skin-catalog.js';
+import { MatchRewardsService } from './match-rewards.service.js';
 import { SkinPermissionsService } from './skin-permissions.service.js';
 import { CsgoApiCatalogSource, NoPriceProvider, SkinportPriceProvider } from './skin-sources.js';
 import { SkinSyncService } from './skin-sync.service.js';
@@ -15,6 +16,7 @@ import { SkinsService } from './skins.service.js';
   controllers: [SkinsController, InventoryController, LoadoutsController, AdminSkinsController, SkinsGatewayController],
   providers: [
     SkinsService,
+    MatchRewardsService,
     SkinPermissionsService,
     InventoryService,
     LoadoutsService,

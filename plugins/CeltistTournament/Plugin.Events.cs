@@ -22,6 +22,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerHurt>(OnPlayerHurt);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
         RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
         VirtualFunctions.GiveNamedItemFunc.Hook(OnGiveNamedItemPost, HookMode.Post);
@@ -86,7 +87,22 @@ public sealed partial class CeltistTournamentPlugin
         {
             var id = player.SteamID;
             if (!_loadouts.ContainsKey(id)) _ = ApplySkinsAsync(id);
-            AddTimer(0.3f, () => { ApplyToHeldWeapons(id); ApplyGloves(id); }); // weapons and the player model exist a moment after the spawn event
+            foreach (var delay in new[] { 0.3f, 1.2f }) AddTimer(delay, () => { ApplyToHeldWeapons(id); ApplyGloves(id); }); // weapons and the player model exist a moment after the spawn event; the second pass catches a late team change
+        }
+        return HookResult.Continue;
+    }
+
+    /// <summary>
+    /// Switching sides: the loadout of the new side must apply to what the player already holds. The team number is only
+    /// final a moment after the event, so the skins are applied after short delays.
+    /// </summary>
+    private HookResult OnPlayerTeam(EventPlayerTeam e, GameEventInfo info)
+    {
+        var player = e.Userid;
+        if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
+        {
+            var id = player.SteamID;
+            foreach (var delay in new[] { 0.5f, 1.5f }) AddTimer(delay, () => { ApplyToHeldWeapons(id); ApplyGloves(id); });
         }
         return HookResult.Continue;
     }

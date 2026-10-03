@@ -52,7 +52,7 @@ export function Nav() {
           {ready && (me.user ? (
             <>
               <Link href="/profile" className="hidden items-center gap-2 rounded-md px-2 py-1 text-sm font-semibold hover:bg-card-hover sm:flex">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">{me.user.displayName.slice(0, 1).toUpperCase()}</span>
+                {me.user.avatarUrl ? <img src={me.user.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover ring-1 ring-border" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">{me.user.displayName.slice(0, 1).toUpperCase()}</span>}
                 {me.user.displayName}
               </Link>
               <Button variant="secondary" className="whitespace-nowrap px-3 sm:px-4" onClick={() => void logout()}>Abmelden</Button>

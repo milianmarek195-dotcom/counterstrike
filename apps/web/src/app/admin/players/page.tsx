@@ -5,13 +5,13 @@ import { api, useAction, useApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { fmtDate } from '@/lib/format';
 
-interface P { id: string; steamId: string; displayName: string; elo: Record<string, number>; roles: Array<{ key: string }> }
+interface P { id: string; steamId: string; displayName: string; avatarUrl?: string | null; elo: Record<string, number>; roles: Array<{ key: string }> }
 interface Detail { id: string; displayName: string; ranks: Array<{ mode: string; elo: number; rank: string }>; bans: Array<{ id: string; reason: string; active: boolean; expiresAt: string | null; createdAt: string }> }
 
 export default function AdminPlayers() {
   const { can } = useAuth();
   const [q, setQ] = useState('');
-  const list = useApi<{ players: P[] }>(`/admin/players?pageSize=25${q ? `&q=${encodeURIComponent(q)}` : ''}`);
+  const list = useApi<{ total?: number; players: P[] }>(`/admin/players?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ''}`);
   const [sel, setSel] = useState<string | null>(null);
   const d = useApi<Detail>(sel ? `/admin/players/${sel}` : null);
   const act = useAction(() => { d.reload(); list.reload(); });
@@ -20,12 +20,12 @@ export default function AdminPlayers() {
   const [hours, setHours] = useState('');
   return (
     <>
-      <PageTitle title="Spieler & Bans" actions={<div className="w-56"><Input aria-label="Suche" placeholder="Name oder SteamID …" value={q} onChange={(e) => setQ(e.target.value)} /></div>} />
+      <PageTitle title={'Registrierte Spieler' + (list.data?.total !== undefined ? ' (' + list.data.total + ')' : '')} actions={<div className="w-56"><Input aria-label="Suche" placeholder="Name oder SteamID …" value={q} onChange={(e) => setQ(e.target.value)} /></div>} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           {list.loading && !list.data ? <Loading /> : (
             <Table head={['Spieler', 'Elo', 'Rollen']}>
-              {list.data?.players.map((p) => <tr key={p.id} onClick={() => setSel(p.id)} className={`cursor-pointer hover:bg-card-hover ${sel === p.id ? 'bg-card-hover' : ''}`}><td className="px-3 py-2">{p.displayName}<div className="text-xs text-muted">{p.steamId}</div></td><td className="px-3 py-2">{p.elo.FIVE_V_FIVE ?? '–'}</td><td className="px-3 py-2 text-xs">{p.roles.map((r) => r.key).join(', ') || '–'}</td></tr>)}
+              {list.data?.players.map((p) => <tr key={p.id} onClick={() => setSel(p.id)} className={`cursor-pointer hover:bg-card-hover ${sel === p.id ? 'bg-card-hover' : ''}`}><td className="px-3 py-2"><span className="flex items-center gap-2">{p.avatarUrl && <img src={p.avatarUrl} alt="" className="h-6 w-6 rounded-full" />}{p.displayName}</span><div className="text-xs text-muted">{p.steamId}</div></td><td className="px-3 py-2">{p.elo.FIVE_V_FIVE ?? '–'}</td><td className="px-3 py-2 text-xs">{p.roles.map((r) => r.key).join(', ') || '–'}</td></tr>)}
             </Table>
           )}
         </div>
