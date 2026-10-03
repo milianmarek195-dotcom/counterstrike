@@ -225,7 +225,7 @@ export default function SkinChanger() {
 function Inventory({ items, limit, onDelete, onStar }: { items: Item[]; limit?: number; onDelete: (id: string) => void; onStar: (id: string, favorite: boolean) => void }) {
   const shown = items.filter((i) => i.favorite);
   return (
-    <details className="mt-10">
+    <details className="mt-10" open>
       <summary className="cursor-pointer font-display text-xl font-bold uppercase tracking-wider">Inventar <span className="text-sm font-normal normal-case text-muted">({shown.length} Favoriten · {items.length}/{limit ?? '–'} gespeichert)</span></summary>
       <p className="mb-3 mt-1 text-sm text-muted">Hier liegen nur Skins mit Stern – sie bleiben dauerhaft erhalten und erscheinen beim Auswählen einer Waffe zum direkten Ausrüsten. Skins ohne Stern gibt es nur, solange sie in einem Loadout stecken. Den Stern setzt du direkt auf der Waffe im Loadout (Stern oben rechts).</p>
       {shown.length === 0 && <p className="mb-3 text-sm text-muted">Noch keine Favoriten.</p>}
