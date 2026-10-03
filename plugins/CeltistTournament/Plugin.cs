@@ -63,6 +63,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
         _ = SendHeartbeatAsync();
         _ = LoadAgentModelsAsync();
         Server.ExecuteCommand("sv_vote_kick_ban_duration 0");
+        Server.ExecuteCommand("removeallids"); // players kicked by a vote earlier can come back
         _status = "READY";
         Logger.LogInformation("[Celtist] started, API {Url}, server {Id}", Config.ApiUrl, Config.ServerId);
     }
