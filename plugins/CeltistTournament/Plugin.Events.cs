@@ -123,7 +123,7 @@ public sealed partial class CeltistTournamentPlugin
         if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
         {
             var id = player.SteamID;
-            AddTimer(0.15f, () => ApplyToHeldWeapons(id));
+            AddTimer(0.15f, () => { ReplaceForeignWeapons(id); ApplyToHeldWeapons(id); });
         }
         return HookResult.Continue;
     }

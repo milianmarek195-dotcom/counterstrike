@@ -26,7 +26,7 @@ public sealed partial class CeltistTournamentPlugin
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
     /// <summary>Weapons this plugin already wrote (entity index → item id + what was written), so a weapon is not rewritten on every trigger.</summary>
-    private readonly Dictionary<uint, (ulong Id, string Signature)> _stamped = new();
+    private readonly Dictionary<uint, (ulong Id, string Signature, ulong Owner)> _stamped = new();
 
     // Econ attributes are set through the game's own function (located by signature, see gamedata/celtist.json).
     // The signature has to be re-checked after big CS2 updates; if it cannot be resolved, only the fallback fields are used.
@@ -253,6 +253,52 @@ public sealed partial class CeltistTournamentPlugin
         string.Join(",", item.Stickers.Select(s => $"{s.Slot}/{s.Def}/{s.Wear}/{s.OffsetX}/{s.OffsetY}/{s.Rotation}/{s.Scale}"));
 
     /// <summary>
+    /// A gun carrying somebody else's skin (picked up from the floor) is replaced by a fresh one: the first-person model and the
+    /// name tag are only rebuilt when a weapon is created, so editing the weapon in the hand is not enough. The fresh weapon
+    /// gets the new holder's own skin for it, or none.
+    /// </summary>
+    private void ReplaceForeignWeapons(ulong steamId)
+    {
+        try
+        {
+            var player = Utilities.GetPlayerFromSteamId(steamId);
+            if (!IsHuman(player) || !player!.PawnIsAlive) return;
+            var pawn = player.PlayerPawn.Value;
+            var weapons = pawn?.WeaponServices?.MyWeapons;
+            if (pawn is null || weapons is null) return;
+            var activeIndex = pawn.WeaponServices?.ActiveWeapon.Value?.Index;
+            var swap = new List<(string Name, int Clip, int Reserve, bool Active)>();
+            foreach (var handle in weapons)
+            {
+                var w = handle.Value;
+                if (w is null || !w.IsValid || !_stamped.TryGetValue(w.Index, out var stamp) || stamp.Owner == steamId) continue;
+                if (!WeaponClassByDef.TryGetValue(w.AttributeManager.Item.ItemDefinitionIndex, out var className)) continue;
+                swap.Add((className, w.Clip1, w.ReserveAmmo[0], w.Index == activeIndex));
+                _stamped.Remove(w.Index);
+                w.AddEntityIOEvent("Kill", w, null, "", 0.1f);
+            }
+            if (swap.Count == 0) return;
+            Logger.LogInformation("[Celtist] {Count} weapon(s) of another player replaced for {Steam}", swap.Count, steamId);
+            AddTimer(0.23f, () =>
+            {
+                if (!IsHuman(player) || !player.PawnIsAlive) return;
+                foreach (var g in swap)
+                {
+                    var created = new CBasePlayerWeapon(player.GiveNamedItem(g.Name));
+                    Server.NextFrame(() =>
+                    {
+                        if (!created.IsValid) return;
+                        created.Clip1 = g.Clip;
+                        created.ReserveAmmo[0] = g.Reserve;
+                    });
+                    if (g.Active) AddTimer(0.15f, () => { if (player.IsValid && player.PawnIsAlive) player.ExecuteClientCommand($"use {g.Name}"); }, TimerFlags.STOP_ON_MAPCHANGE);
+                }
+            }, TimerFlags.STOP_ON_MAPCHANGE);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] replacing foreign weapons failed: {Message}", e.Message); }
+    }
+
+    /// <summary>
     /// Skins and name tags belong to their owner: when somebody else picks the weapon up, it goes back to the plain weapon
     /// (or gets the new holder's own skin for it, which ApplyToWeapon writes afterwards).
     /// </summary>
@@ -352,7 +398,7 @@ public sealed partial class CeltistTournamentPlugin
             weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
 
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager"); // the name tag is part of the networked item
-            _stamped[weapon.Index] = (econ.ItemID, signature);
+            _stamped[weapon.Index] = (econ.ItemID, signature, steamId);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon: {Message}", e.Message); }
