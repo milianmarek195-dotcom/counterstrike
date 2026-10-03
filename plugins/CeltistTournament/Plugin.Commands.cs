@@ -176,6 +176,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_skindbg", "Debug: !skindbg clear|paint|mesh|extras switches one part of the weapon skin on or off", OnSkinDebugCommand);
         AddCommand("css_mesh", "Debug: flip the weapon model of the weapon in your hand and report the skin data", OnMeshCommand);
         AddCommand("css_noclip", "Fly through walls (listed players, outside of a running match)", OnNoclipCommand);
         AddCommand("css_agent", "Toggle your agent (player model) from your loadout", OnAgentCommand);
@@ -183,6 +184,21 @@ public sealed partial class CeltistTournamentPlugin
     }
 
     /// <summary>Helps to find out why a skin does not show: flips the mesh group of the held weapon and prints what is set on it.</summary>
+    private void OnSkinDebugCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
+        switch (info.ArgString.Trim().ToLowerInvariant())
+        {
+            case "clear": _dbgClear = !_dbgClear; break;
+            case "paint": _dbgPaint = !_dbgPaint; break;
+            case "mesh": _dbgMesh = !_dbgMesh; break;
+            case "extras": _dbgExtras = !_dbgExtras; break;
+            case "reset": _dbgClear = _dbgPaint = _dbgMesh = _dbgExtras = true; break;
+        }
+        player.PrintToChat($" [Celtist] clear={_dbgClear} paint={_dbgPaint} mesh={_dbgMesh} extras={_dbgExtras} - drop and pick up the weapon (or switch weapons) to see the effect");
+        ApplyToHeldWeapons(player.SteamID);
+    }
+
     private void OnMeshCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || !player.IsValid || !player.PawnIsAlive || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;

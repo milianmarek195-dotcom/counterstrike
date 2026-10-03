@@ -13,6 +13,8 @@ public sealed partial class CeltistTournamentPlugin
     private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null, bool Legacy = false, List<(int Slot, int Def, float Wear)>? Stickers = null, int KeychainDef = 0, int KeychainSeed = 0);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
+    // switches for finding out why a skin does not show (!skindbg): each part of the weapon skin can be turned off on its own
+    private bool _dbgClear = true, _dbgPaint = true, _dbgMesh = true, _dbgExtras = true;
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
 
@@ -86,13 +88,17 @@ public sealed partial class CeltistTournamentPlugin
     /// </summary>
     private void ApplyExtras(CEconItemView econ, SkinItem item)
     {
-        econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
-        econ.AttributeList.Attributes.RemoveAll();
+        if (_dbgClear)
+        {
+            econ.NetworkedDynamicAttributes.Attributes.RemoveAll();
+            econ.AttributeList.Attributes.RemoveAll();
+        }
+        if (!_dbgExtras) return;
         // StatTrak needs the "strange" quality and the kill counter next to the fallback value
         if (item.StatTrak) econ.EntityQuality = 9;
         if (!EnsureAttributeSetter()) return;
         // the paint also goes in as item attributes (like on knives): the kill feed and the "killed by" panel name the item from them
-        SetPaintAttributes(econ, item);
+        if (_dbgPaint) SetPaintAttributes(econ, item);
         foreach (var handle in new[] { econ.NetworkedDynamicAttributes.Handle, econ.AttributeList.Handle })
         {
             if (item.StatTrak)
@@ -159,7 +165,7 @@ public sealed partial class CeltistTournamentPlugin
             var item = IsKnife(active.DesignerName)
                 ? items.FirstOrDefault(i => i.Slot == "KNIFE")
                 : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
-            if (item is null) return;
+            if (item is null || !_dbgMesh) return;
             foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
                 if (viewModel.IsValid && viewModel.OwnerEntity.Value?.Index == pawn.Index) SetMeshMask(viewModel, item.Legacy);
         }
@@ -263,7 +269,7 @@ public sealed partial class CeltistTournamentPlugin
             weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
             ApplyExtras(econ, item);
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
-            SetMeshMask(weapon, item.Legacy);
+            if (_dbgMesh) SetMeshMask(weapon, item.Legacy);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon: {Message}", e.Message); }
