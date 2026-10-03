@@ -67,6 +67,13 @@ export class InventoryService {
     return toView(updated);
   }
 
+  /** Stars or un-stars an item (favorites are the quick-equip list of the skin changer). */
+  async setFavorite(userId: string, itemId: string, favorite: boolean) {
+    await this.get(userId, itemId);
+    await this.prisma.inventoryItem.update({ where: { id: itemId }, data: { favorite } });
+    return { id: itemId, favorite };
+  }
+
   async remove(userId: string, itemId: string): Promise<void> {
     await this.get(userId, itemId);
     await this.prisma.inventoryItem.delete({ where: { id: itemId } });
@@ -170,6 +177,7 @@ export function toView(item: InventoryItemRow) {
     nameTag: item.nameTag,
     keychain: item.keychain,
     keychainSeed: item.keychainSeed,
+    favorite: item.favorite,
     stickers: item.stickers.map((s) => ({ slotIndex: s.slotIndex, wear: s.wear, sticker: s.sticker, offsetX: s.offsetX, offsetY: s.offsetY, rotation: s.rotation, scale: s.scale })),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

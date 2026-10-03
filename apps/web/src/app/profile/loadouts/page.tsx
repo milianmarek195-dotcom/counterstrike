@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Lock, Plus, Share2, Trash2, X } from 'lucide-react';
+import { Check, Lock, Plus, Share2, Star, Trash2, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Loading, PageTitle } from '@/components/ui';
 import { api, useAction, useApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -14,7 +14,7 @@ interface Skin { id: string; name: string; phase: string | null; weaponName: str
 interface Sticker { id: string; name: string; imageUrl: string | null }
 interface Charm { id: string; name: string; rarity: string | null; imageUrl: string | null }
 interface ItemSkin { name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
-interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null }
+interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null; favorite?: boolean }
 interface LoadoutEntry { weaponDefIndex: number; team: Team; item: Item }
 interface Loadout { id: string; name: string; shareCode: string | null; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; isActive: boolean; items: LoadoutEntry[] }
 interface Access { level: number; floatEditing: boolean; stickerCrafts: boolean; customLoadouts: boolean; expiresAt: string | null }
@@ -189,26 +189,31 @@ export default function SkinChanger() {
           access={access.data}
           level={level}
           current={equipped[side][picking.key] ?? null}
+          favorites={(inv.data?.items ?? []).filter((i) => i.favorite && (picking.key === 'KNIFE' || picking.key === 'GLOVES' || picking.key === 'AGENT' ? i.slot === picking.key : String(i.weaponDefIndex) === picking.key))}
           onClose={() => setPicking(null)}
           onEquip={(sides, item) => { equip(picking, sides, item); setPicking(null); }}
         />
       )}
 
-      <Inventory items={inv.data?.items ?? []} limit={inv.data?.limit} onDelete={(id) => void act.run(() => api(`/inventory/${id}`, { method: 'DELETE' }))} />
+      <Inventory items={inv.data?.items ?? []} limit={inv.data?.limit} onDelete={(id) => void act.run(() => api(`/inventory/${id}`, { method: 'DELETE' }))} onStar={(id, favorite) => void act.run(() => api(`/inventory/${id}/favorite`, { method: 'PUT', body: { favorite } }))} />
     </>
   );
 }
 
-function Inventory({ items, limit, onDelete }: { items: Item[]; limit?: number; onDelete: (id: string) => void }) {
+function Inventory({ items, limit, onDelete, onStar }: { items: Item[]; limit?: number; onDelete: (id: string) => void; onStar: (id: string, favorite: boolean) => void }) {
+  const [onlyStars, setOnlyStars] = useState(false);
+  const shown = (onlyStars ? items.filter((i) => i.favorite) : [...items].sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite)));
   return (
     <details className="mt-10">
       <summary className="cursor-pointer font-display text-xl font-bold uppercase tracking-wider">Inventar <span className="text-sm font-normal normal-case text-muted">({items.length}/{limit ?? '–'})</span></summary>
-      <p className="mb-3 mt-1 text-sm text-muted">Gespeicherte Skins, die in keinem Loadout stecken, kannst du hier löschen.</p>
+      <p className="mb-3 mt-1 text-sm text-muted">Markiere Skins mit dem Stern: Favoriten stehen oben und erscheinen beim Auswählen einer Waffe zum direkten Ausrüsten. Nicht mehr benötigte Skins kannst du löschen.</p>
+      <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyStars} onChange={(e) => setOnlyStars(e.target.checked)} />Nur Favoriten ({items.filter((i) => i.favorite).length})</label>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((i) => (
+        {shown.map((i) => (
           <li key={i.id} className="flex items-center gap-3 rounded-md border bg-card p-2 text-sm">
             {i.skin?.imageUrl && <img src={img(i.skin.imageUrl, '96fx72f')} alt="" referrerPolicy="no-referrer" className="h-12 w-16 object-contain" />}
             <div className="min-w-0 flex-1"><div className="truncate font-medium">{i.skin ? `${i.skin.weaponName} | ${skinName(i.skin.name, i.skin.phase)}` : `Waffe ${i.weaponDefIndex}`}</div><div className="text-xs text-muted">{wearName(i.float)} · {i.float.toFixed(3)} · Pattern {i.pattern}</div></div>
+            <Button variant="ghost" aria-label={i.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'} aria-pressed={!!i.favorite} onClick={() => onStar(i.id, !i.favorite)}><Star size={15} className={i.favorite ? 'fill-primary text-primary' : ''} /></Button>
             <Button variant="ghost" aria-label="Item löschen" onClick={() => onDelete(i.id)}><Trash2 size={15} /></Button>
           </li>
         ))}
@@ -218,7 +223,7 @@ function Inventory({ items, limit, onDelete }: { items: Item[]; limit?: number; 
 }
 
 /** Skin choice + editor for one slot, opened over the grid. */
-function Picker({ slot, side, access, level, current, onClose, onEquip }: { slot: Slot; side: Side; access: Access | undefined; level: number; current: Item | null; onClose: () => void; onEquip: (sides: Side[], item: Item | null) => void }) {
+function Picker({ slot, side, access, level, current, favorites, onClose, onEquip }: { slot: Slot; side: Side; access: Access | undefined; level: number; current: Item | null; favorites: Item[]; onClose: () => void; onEquip: (sides: Side[], item: Item | null) => void }) {
   const isGroup = slot.key === 'KNIFE' || slot.key === 'GLOVES';
   const weapons = useApi<{ weapons: Weapon[] }>(isGroup ? '/skins/weapons' : null);
   const types = (weapons.data?.weapons ?? []).filter((w) => w.slot === slot.key);
@@ -251,6 +256,19 @@ function Picker({ slot, side, access, level, current, onClose, onEquip }: { slot
                 {types.map((w) => (
                   <button key={w.weaponDefIndex} onClick={() => setType(w.weaponDefIndex)} aria-pressed={weaponDef === w.weaponDefIndex} className={cn('rounded-md border px-2.5 py-1 text-sm font-medium', weaponDef === w.weaponDefIndex ? 'bg-primary text-primary-fg' : 'bg-card hover:bg-card-hover')}>{w.weaponName}</button>
                 ))}
+              </div>
+            )}
+            {favorites.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted"><Star size={12} className="fill-primary text-primary" />Favoriten – ein Klick zum Ausrüsten</div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {favorites.map((f) => (
+                    <button key={f.id} onClick={() => onEquip(slot.key === 'AGENT' ? [side] : [side], f)} className="flex items-center gap-2 rounded-md border bg-card p-2 text-left hover:bg-card-hover" style={{ borderBottom: `3px solid ${RARITY[f.skin?.rarity ?? ''] ?? '#888'}` }}>
+                      {f.skin?.imageUrl && <img src={img(f.skin.imageUrl, '96fx72f')} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-10 w-14 object-contain" />}
+                      <span className="min-w-0 text-xs"><span className="block truncate font-semibold">{f.slot === 'AGENT' ? f.skin?.weaponName : skinName(f.skin?.name, f.skin?.phase)}</span><span className="block text-muted">{f.slot === 'AGENT' ? 'Agent' : `${f.float.toFixed(3)} · Pattern ${f.pattern}`}</span></span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             <div className="mb-3 w-56"><Input aria-label="Skin filtern" placeholder="Skin filtern …" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>

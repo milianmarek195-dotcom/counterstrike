@@ -106,6 +106,11 @@ export class InventoryController {
     return this.inventory.update(auth.userId, id, body);
   }
 
+  @Put(':id/favorite')
+  favorite(@CurrentAuth() auth: AuthContext, @Param('id', { schema: idParam }) id: string, @Body({ schema: z.object({ favorite: z.boolean() }) }) body: { favorite: boolean }) {
+    return this.inventory.setFavorite(auth.userId, id, body.favorite);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentAuth() auth: AuthContext, @Param('id', { schema: idParam }) id: string): Promise<void> {

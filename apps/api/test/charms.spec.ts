@@ -48,4 +48,14 @@ describe('charms', () => {
     expect(ok.keychainSeed).toBe(77);
     await as(t, player).post('/v1/inventory', { slot: 'KNIFE', weaponDefIndex: 507, skinId: knife, floatValue: 0.01, paintSeed: 1, keychainId: charmId }).expect(400);
   });
+
+  it('stars and un-stars an inventory item, only for its owner', async () => {
+    const glock = (await t.prisma.skin.findFirstOrThrow({ where: { weaponDefIndex: 4 } })).id;
+    const item = (await as(t, player).post('/v1/inventory', { slot: 'PISTOL', weaponDefIndex: 4, skinId: glock, floatValue: 0.01, paintSeed: 5 }).expect(201)).body;
+    expect(item.favorite).toBe(false);
+    await as(t, player).put(`/v1/inventory/${item.id}/favorite`, { favorite: true }).expect(200);
+    const list = (await as(t, player).get('/v1/inventory').expect(200)).body;
+    expect(list.items.find((x: { id: string }) => x.id === item.id).favorite).toBe(true);
+    await as(t, admin).put(`/v1/inventory/${item.id}/favorite`, { favorite: false }).expect(404);
+  });
 });
