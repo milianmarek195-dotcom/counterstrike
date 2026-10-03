@@ -91,6 +91,18 @@ export class ServerHeartbeatService {
   private async reconcileMatch(serverId: string, expected: string | null, payload: HeartbeatPayload): Promise<void> {
     const reported = payload.currentMatchId;
 
+    // The server came back (API restart, brief outage) and still hosts the match that was flagged SERVER_ERROR: continue it.
+    if (expected && reported === expected) {
+      const resumed = await this.prisma.match.findUnique({ where: { id: expected }, select: { status: true, startedAt: true } });
+      if (resumed?.status === 'SERVER_ERROR') {
+        const back = await this.prisma.match.updateMany({ where: { id: expected, status: 'SERVER_ERROR' }, data: { status: resumed.startedAt ? 'LIVE' : 'CONFIGURING' } });
+        if (back.count > 0) {
+          this.logger.log(`Match ${expected} continues: its server is back`);
+          this.events.emit(DomainEvent.MatchUpdated, { matchId: expected });
+        }
+      }
+    }
+
     // The plugin lost a match that the backend considers running (crash/restart): flag it for recovery.
     if (expected && !reported && payload.status !== 'STARTING') {
       const match = await this.prisma.match.findUnique({ where: { id: expected }, select: { status: true } });

@@ -116,8 +116,8 @@ public sealed partial class CeltistTournamentPlugin
                 ? items.FirstOrDefault(i => i.Slot == "KNIFE")
                 : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
             if (item is null) return;
-            foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CCSGOViewModel>("predicted_viewmodel"))
-                if (viewModel.IsValid && viewModel.Weapon.Value?.Index == active.Index) SetMeshMask(viewModel, item.Legacy);
+            foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
+                if (viewModel.IsValid && viewModel.OwnerEntity.Value?.Index == pawn.Index) SetMeshMask(viewModel, item.Legacy);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] view model mesh failed: {Message}", e.Message); }
     }
