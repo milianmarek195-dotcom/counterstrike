@@ -36,7 +36,15 @@ export class SkinsController {
   constructor(
     private readonly skins: SkinsService,
     private readonly permissions: SkinPermissionsService,
+    private readonly loadouts: LoadoutsService,
   ) {}
+
+  /** What a player currently has equipped, if they keep their active loadout public. */
+  @Get('players/:steamId/loadout')
+  @Public()
+  playerLoadout(@Param('steamId', { schema: steamId64Schema }) steamId: string) {
+    return this.loadouts.publicActive(steamId);
+  }
 
   @Get('skins')
   @Public()

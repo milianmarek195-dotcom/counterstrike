@@ -76,4 +76,16 @@ describe('agents in the skin changer', () => {
     const loadout = (await as(t, player).post('/v1/loadouts', { name: 'A' }).expect(201)).body;
     expect((await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: a.id }, { inventoryItemId: b.id }] }).expect(400)).body.error).toBe('DUPLICATE_AGENT');
   });
+
+  it('shows the active loadout on the public profile unless its owner makes it private', async () => {
+    const a = await owned(4613);
+    const loadout = (await as(t, player).post('/v1/loadouts', { name: 'A' }).expect(201)).body;
+    await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: a.id }] }).expect(200);
+    await as(t, player).post(`/v1/loadouts/${loadout.id}/activate`).expect(201);
+    const pub = (await as(t, null).get(`/v1/players/${player.steamId}/loadout`).expect(200)).body;
+    expect(pub.loadout.items).toHaveLength(1);
+    expect(pub.loadout.shareCode).toBeUndefined();
+    await as(t, player).patch(`/v1/loadouts/${loadout.id}`, { visibility: 'PRIVATE' }).expect(200);
+    expect((await as(t, null).get(`/v1/players/${player.steamId}/loadout`).expect(200)).body.loadout).toBeNull();
+  });
 });

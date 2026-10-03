@@ -15,7 +15,7 @@ interface Sticker { id: string; name: string; imageUrl: string | null }
 interface ItemSkin { name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
 interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null }
 interface LoadoutEntry { weaponDefIndex: number; team: Team; item: Item }
-interface Loadout { id: string; name: string; shareCode: string | null; isActive: boolean; items: LoadoutEntry[] }
+interface Loadout { id: string; name: string; shareCode: string | null; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; isActive: boolean; items: LoadoutEntry[] }
 interface Access { level: number; floatEditing: boolean; stickerCrafts: boolean; customLoadouts: boolean; expiresAt: string | null }
 interface PriceEntry { wear: string; variant: string; priceUsd: number; requiredLevel: number }
 interface PlacedSticker { sticker: Sticker; wear: number; rotation: number; scale: number }
@@ -413,6 +413,7 @@ function LoadoutBar({ loadouts, limit, target, setTarget, act, loading }: { load
               <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                 {!l.isActive && <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void act.run(() => api(`/loadouts/${l.id}/activate`, { method: 'POST' }))}>Aktivieren</Button>}
                 <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void act.run(() => api(`/loadouts/${l.id}/share-code`, { method: 'POST' }))}><Share2 size={12} />Code</Button>
+                <Button variant="secondary" className="px-2 py-1 text-xs" title="Nur das aktive Loadout erscheint auf deinem Profil" onClick={() => void act.run(() => api(`/loadouts/${l.id}`, { method: 'PATCH', body: { visibility: l.visibility === 'PRIVATE' ? 'PUBLIC' : 'PRIVATE' } }))}>{l.visibility === 'PRIVATE' ? 'Privat' : 'Öffentlich'}</Button>
                 <Button variant="ghost" className="px-2 py-1 text-xs" aria-label="Loadout löschen" onClick={() => { if (confirm(`Loadout „${l.name}“ löschen?`)) void act.run(() => api(`/loadouts/${l.id}`, { method: 'DELETE' })); }}><Trash2 size={12} /></Button>
               </div>
             )}

@@ -352,7 +352,8 @@ describe('skins, inventory, loadouts and skin access', () => {
       expect(loadout.shareCode).toMatch(/^CELTIST-[A-HJ-NP-Z2-9]{6}$/);
 
       const friend = await createUser(t);
-      await as(t, friend).get(`/v1/loadouts/code/${loadout.shareCode}`).expect(404); // private by default
+      await as(t, player).patch(`/v1/loadouts/${loadout.id}`, { visibility: 'PRIVATE' }).expect(200);
+      await as(t, friend).get(`/v1/loadouts/code/${loadout.shareCode}`).expect(404); // private on request
       await as(t, player).patch(`/v1/loadouts/${loadout.id}`, { visibility: 'UNLISTED' }).expect(200);
       const seen = (await as(t, friend).get(`/v1/loadouts/code/${loadout.shareCode.toLowerCase().replace('-', ' ')}`).expect(200)).body;
       expect(seen).toMatchObject({ name: 'Shareable', items: expect.any(Array) });

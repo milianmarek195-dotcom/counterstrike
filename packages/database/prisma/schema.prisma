@@ -1207,7 +1207,7 @@ model Loadout {
   ownerId        String            @db.Uuid
   name           String            @db.VarChar(40)
   shareCode      String            @unique @db.VarChar(24)
-  visibility     LoadoutVisibility @default(PRIVATE)
+  visibility     LoadoutVisibility @default(PUBLIC)
   isActive       Boolean           @default(false) // at most one active loadout per user (partial unique index)
   importedFromId String?           @db.Uuid
   createdAt      DateTime          @default(now())

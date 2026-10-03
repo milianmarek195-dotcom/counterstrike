@@ -56,6 +56,16 @@ export class LoadoutsService {
     private readonly permissions: SkinPermissionsService,
   ) {}
 
+  /** The active loadout of a player as other people see it (only when its owner left it public). */
+  async publicActive(steamId: string) {
+    const user = await this.prisma.user.findUnique({ where: { steamId }, select: { id: true, displayName: true } });
+    if (!user) throw notFound('USER_NOT_FOUND', 'Player does not exist');
+    const loadout = await this.prisma.loadout.findFirst({ where: { ownerId: user.id, isActive: true, visibility: 'PUBLIC' }, include: loadoutInclude });
+    if (!loadout) return { loadout: null };
+    const { shareCode: _code, ...rest } = view(loadout, user);
+    return { loadout: rest };
+  }
+
   async list(userId: string) {
     const loadouts = await this.prisma.loadout.findMany({ where: { ownerId: userId }, include: loadoutInclude, orderBy: { createdAt: 'asc' } });
     return { loadouts: loadouts.map((l) => view(l)), limit: await this.limit() };
