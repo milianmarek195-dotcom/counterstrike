@@ -13,8 +13,10 @@ interface Weapon { weaponDefIndex: number; weaponName: string; slot: string; ski
 interface Skin { id: string; name: string; phase: string | null; weaponName: string; weaponDefIndex: number; slot: string; paintIndex: number; rarity: string | null; imageUrl: string | null; minFloat: number; maxFloat: number; statTrakAvailable: boolean; souvenirAvailable: boolean; priceMaxUsd: number | null; requiredLevel: number; side?: string | null }
 interface Sticker { id: string; name: string; imageUrl: string | null }
 interface Charm { id: string; name: string; rarity: string | null; imageUrl: string | null }
-interface ItemSkin { name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
-interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null; favorite?: boolean }
+interface ItemSkin { id?: string; name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
+interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null; favorite?: boolean;
+  stickers?: Array<{ slotIndex: number; wear: number; rotation: number | null; scale: number | null; sticker: Sticker }>;
+  keychain?: Charm | null; keychainSeed?: number; keychainOffsetX?: number; keychainOffsetY?: number; keychainOffsetZ?: number }
 interface LoadoutEntry { weaponDefIndex: number; team: Team; item: Item }
 interface Loadout { id: string; name: string; shareCode: string | null; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; isActive: boolean; items: LoadoutEntry[] }
 interface Access { level: number; floatEditing: boolean; stickerCrafts: boolean; customLoadouts: boolean; expiresAt: string | null }
@@ -102,6 +104,7 @@ export default function SkinChanger() {
   const [side, setSide] = useState<Side>('CT');
   const [target, setTarget] = useState<string | null>(null);
   const [picking, setPicking] = useState<Slot | null>(null);
+  const [managing, setManaging] = useState<Slot | null>(null);
 
   const level = access.data?.level ?? 0;
   useEffect(() => { if (!target && lo.data?.loadouts[0]) setTarget(lo.data.loadouts.find((l) => l.isActive)?.id ?? lo.data.loadouts[0].id); }, [lo.data, target]);
@@ -130,11 +133,14 @@ export default function SkinChanger() {
     const item = equipped[side][slot.key];
     const rarity = item?.skin?.rarity ? RARITY[item.skin.rarity] : undefined;
     return (
-      <button key={slot.key} onClick={() => setPicking(slot)} className="group relative flex h-24 flex-col justify-between overflow-hidden rounded-md border bg-card p-2 text-left transition hover:bg-card-hover" style={{ borderBottom: `3px solid ${rarity ?? 'var(--border)'}` }} aria-label={`${slot.name} wählen`}>
+      <div key={slot.key} className="relative">
+      {item && <button type="button" onClick={() => void act.run(() => api(`/inventory/${item.id}/favorite`, { method: 'PUT', body: { favorite: !item.favorite } }))} className="absolute right-1.5 top-1.5 z-20 rounded p-1 hover:bg-black/40" aria-label={item.favorite ? 'Favorit entfernen' : 'Dauerhaft im Inventar behalten (Stern)'} title={item.favorite ? 'Favorit – bleibt im Inventar' : 'Stern setzen: dauerhaft im Inventar behalten'}><Star size={15} className={item.favorite ? 'fill-primary text-primary' : 'text-muted'} /></button>}
+      <button onClick={() => (item ? setManaging(slot) : setPicking(slot))} className="group relative flex h-24 w-full flex-col justify-between overflow-hidden rounded-md border bg-card p-2 text-left transition hover:bg-card-hover" style={{ borderBottom: `3px solid ${rarity ?? 'var(--border)'}` }} aria-label={item ? `${slot.name} verwalten` : `${slot.name} wählen`}>
         <span className="font-display text-sm font-bold uppercase tracking-wider text-muted">{slot.name}</span>
         {item?.skin?.imageUrl ? <img src={img(item.skin.imageUrl, '192fx144f')} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-x-0 top-3 mx-auto h-[62px] object-contain transition group-hover:scale-105" /> : <span className="self-center text-xs text-muted/50">Standard</span>}
         {item?.skin && <span className="relative z-10 truncate rounded bg-black/55 px-1 text-[11px] font-semibold text-white">{skinName(item.skin.name, item.skin.phase)}</span>}
       </button>
+      </div>
     );
   };
 
@@ -181,6 +187,22 @@ export default function SkinChanger() {
         </div>
       </div>
 
+      {managing && equipped[side][managing.key] && (
+        <Manage
+          key={`m-${managing.key}-${side}-${equipped[side][managing.key]!.id}`}
+          slot={managing}
+          side={side}
+          item={equipped[side][managing.key]!}
+          access={access.data}
+          level={level}
+          onClose={() => setManaging(null)}
+          onPick={() => { setPicking(managing); setManaging(null); }}
+          onReset={() => { equip(managing, [side], null); setManaging(null); }}
+          onStar={() => { const it = equipped[side][managing.key]!; void act.run(() => api(`/inventory/${it.id}/favorite`, { method: 'PUT', body: { favorite: !it.favorite } })); }}
+          onEquip={(sides, item) => { equip(managing, sides, item); setManaging(null); }}
+        />
+      )}
+
       {picking && (
         <Picker
           key={`${picking.key}-${side}`}
@@ -201,13 +223,12 @@ export default function SkinChanger() {
 }
 
 function Inventory({ items, limit, onDelete, onStar }: { items: Item[]; limit?: number; onDelete: (id: string) => void; onStar: (id: string, favorite: boolean) => void }) {
-  const [onlyStars, setOnlyStars] = useState(false);
-  const shown = (onlyStars ? items.filter((i) => i.favorite) : [...items].sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite)));
+  const shown = items.filter((i) => i.favorite);
   return (
     <details className="mt-10">
-      <summary className="cursor-pointer font-display text-xl font-bold uppercase tracking-wider">Inventar <span className="text-sm font-normal normal-case text-muted">({items.length}/{limit ?? '–'})</span></summary>
-      <p className="mb-3 mt-1 text-sm text-muted">Markiere Skins mit dem Stern: Favoriten stehen oben und erscheinen beim Auswählen einer Waffe zum direkten Ausrüsten. Nicht mehr benötigte Skins kannst du löschen.</p>
-      <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyStars} onChange={(e) => setOnlyStars(e.target.checked)} />Nur Favoriten ({items.filter((i) => i.favorite).length})</label>
+      <summary className="cursor-pointer font-display text-xl font-bold uppercase tracking-wider">Inventar <span className="text-sm font-normal normal-case text-muted">({shown.length} Favoriten · {items.length}/{limit ?? '–'} gespeichert)</span></summary>
+      <p className="mb-3 mt-1 text-sm text-muted">Hier liegen nur Skins mit Stern – sie bleiben dauerhaft erhalten und erscheinen beim Auswählen einer Waffe zum direkten Ausrüsten. Skins ohne Stern gibt es nur, solange sie in einem Loadout stecken. Den Stern setzt du direkt auf der Waffe im Loadout (Stern oben rechts).</p>
+      {shown.length === 0 && <p className="mb-3 text-sm text-muted">Noch keine Favoriten.</p>}
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((i) => (
           <li key={i.id} className="flex items-center gap-3 rounded-md border bg-card p-2 text-sm">
@@ -219,6 +240,35 @@ function Inventory({ items, limit, onDelete, onStar }: { items: Item[]; limit?: 
         ))}
       </ul>
     </details>
+  );
+}
+
+/** Manage the item that is equipped in a slot: edit it in place, switch to another skin, reset it or keep it with a star. */
+function Manage({ slot, side, item, access, level, onClose, onPick, onReset, onStar, onEquip }: { slot: Slot; side: Side; item: Item; access: Access | undefined; level: number; onClose: () => void; onPick: () => void; onReset: () => void; onStar: () => void; onEquip: (sides: Side[], item: Item) => void }) {
+  const detail = useApi<Skin>(item.skin?.id ? `/skins/${item.skin.id}` : null);
+  const skin: Skin | null = detail.data ? { ...detail.data, priceMaxUsd: null, requiredLevel: 0 } : null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`${slot.name} verwalten`}>
+      <div className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-none border bg-elevated sm:rounded-lg">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+          <div>
+            <h2 className="text-2xl">{slot.name} <span className="text-base text-muted">· {side}</span></h2>
+            <p className="text-xs text-muted">{item.skin ? `${item.skin.weaponName}${item.slot === 'AGENT' ? '' : ' | ' + skinName(item.skin.name, item.skin.phase)}` : 'Standard'}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="secondary" onClick={onStar} aria-pressed={!!item.favorite} title="Stern: dauerhaft im Inventar behalten"><Star size={14} className={item.favorite ? 'fill-primary text-primary' : ''} />{item.favorite ? 'Favorit' : 'Stern'}</Button>
+            <Button variant="ghost" aria-label="Schließen" onClick={onClose}><X size={18} /></Button>
+          </div>
+        </div>
+        <div className="flex gap-2 border-b px-4 py-2">
+          <Button onClick={onPick}>Anderen Skin wählen</Button>
+          <Button variant="secondary" onClick={onReset}><Trash2 size={14} />Zurücksetzen ({side})</Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {skin ? <Editor key={item.id} skin={skin} slot={slot} side={side} access={access} level={level} onEquip={onEquip} existing={item} /> : <Loading />}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -299,20 +349,24 @@ function Picker({ slot, side, access, level, current, favorites, onClose, onEqui
   );
 }
 
-function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot: Slot; side: Side; access: Access | undefined; level: number; onEquip: (sides: Side[], item: Item) => void }) {
+function Editor({ skin, slot, side, access, level, onEquip, existing }: { skin: Skin; slot: Slot; side: Side; access: Access | undefined; level: number; onEquip: (sides: Side[], item: Item) => void; existing?: Item }) {
   const canFloat = !!access?.floatEditing;
-  const [float, setFloat] = useState(Math.max(skin.minFloat, Math.min(skin.maxFloat, 0.07)));
-  const [pattern, setPattern] = useState('1');
-  const [statTrak, setStatTrak] = useState(false);
-  const [nameTag, setNameTag] = useState('');
-  const [stickers, setStickers] = useState<Array<PlacedSticker | null>>(Array(STICKER_SLOTS).fill(null));
+  const [float, setFloat] = useState(existing ? existing.float : Math.max(skin.minFloat, Math.min(skin.maxFloat, 0.07)));
+  const [pattern, setPattern] = useState(existing ? String(existing.pattern) : '1');
+  const [statTrak, setStatTrak] = useState(existing?.statTrak ?? false);
+  const [nameTag, setNameTag] = useState(existing?.nameTag ?? '');
+  const [stickers, setStickers] = useState<Array<PlacedSticker | null>>(() => {
+    const slots: Array<PlacedSticker | null> = Array(STICKER_SLOTS).fill(null);
+    for (const s of existing?.stickers ?? []) if (s.slotIndex >= 0 && s.slotIndex < STICKER_SLOTS) slots[s.slotIndex] = { sticker: s.sticker, wear: s.wear, rotation: s.rotation ?? 0, scale: s.scale ?? 1 };
+    return slots;
+  });
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<'SIDE' | 'BOTH'>('SIDE');
   const isAgent = skin.slot === 'AGENT';
-  const [charm, setCharm] = useState<Charm | null>(null);
-  const [charmSeed, setCharmSeed] = useState('0');
-  const [charmPos, setCharmPos] = useState({ x: 0, y: 0, z: 0 });
+  const [charm, setCharm] = useState<Charm | null>(existing?.keychain ?? null);
+  const [charmSeed, setCharmSeed] = useState(String(existing?.keychainSeed ?? 0));
+  const [charmPos, setCharmPos] = useState({ x: existing?.keychainOffsetX ?? 0, y: existing?.keychainOffsetY ?? 0, z: existing?.keychainOffsetZ ?? 0 });
   const charms = useApi<{ keychains: Charm[] }>(!isAgent && skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' ? '/keychains?pageSize=100' : null);
   const found = useApi<{ stickers: Sticker[] }>(pickSlot !== null && q.length >= 2 ? `/stickers?q=${encodeURIComponent(q)}&pageSize=12` : null);
   const detail = useApi<{ prices: PriceEntry[] }>(`/skins/${skin.id}`);
@@ -327,8 +381,8 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
   const canStickers = skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' && !isAgent;
 
   const save = () => void act.run(async () => {
-    const created = await api<Item>('/inventory', {
-      method: 'POST',
+    const created = await api<Item>(existing ? `/inventory/${existing.id}` : '/inventory', {
+      method: existing ? 'PUT' : 'POST',
       body: {
         slot: skin.slot, weaponDefIndex: skin.weaponDefIndex, skinId: skin.id, floatValue: usedFloat, paintSeed: Number(pattern),
         statTrak: statTrak && skin.statTrakAvailable, nameTag: nameTag || null,
@@ -439,7 +493,7 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
 
       {locked && <p className="flex items-center gap-1.5 rounded-md bg-warning/15 p-2 text-sm text-warning"><Lock size={14} />Diese Variante braucht Level {needed} (du hast {level}). Eine stärkere Abnutzung oder ohne StatTrak ist oft günstiger.</p>}
       {act.error && <ErrorBox message={act.error} />}
-      <Button className="w-full" disabled={locked || (!isAgent && !patternValid) || act.busy} onClick={save}>Ausrüsten</Button>
+      <Button className="w-full" disabled={locked || (!isAgent && !patternValid) || act.busy} onClick={save}>{existing ? 'Änderungen speichern' : 'Ausrüsten'}</Button>
     </div>
   );
 }

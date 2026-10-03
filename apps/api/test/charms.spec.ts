@@ -58,4 +58,20 @@ describe('charms', () => {
     expect(list.items.find((x: { id: string }) => x.id === item.id).favorite).toBe(true);
     await as(t, admin).put(`/v1/inventory/${item.id}/favorite`, { favorite: false }).expect(404);
   });
+
+  it('keeps starred items forever and drops unstarred ones once no loadout uses them', async () => {
+    const glock = (await t.prisma.skin.findFirstOrThrow({ where: { weaponDefIndex: 4 } })).id;
+    const mk = async () => (await as(t, player).post('/v1/inventory', { slot: 'PISTOL', weaponDefIndex: 4, skinId: glock, floatValue: 0.01, paintSeed: 5 }).expect(201)).body;
+    const [plain, starred] = [await mk(), await mk()];
+    await as(t, player).put(`/v1/inventory/${starred.id}/favorite`, { favorite: true }).expect(200);
+    const loadout = (await as(t, player).post('/v1/loadouts', { name: 'A' }).expect(201)).body;
+    await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: plain.id }] }).expect(200);
+    const third = await mk(); // created right before it is equipped, like the skin changer does
+    // switch the glock to another item: the plain one is no longer used and has no star
+    await as(t, player).put(`/v1/loadouts/${loadout.id}/items`, { items: [{ inventoryItemId: third.id }] }).expect(200);
+    const ids = (await as(t, player).get('/v1/inventory').expect(200)).body.items.map((x: { id: string }) => x.id);
+    expect(ids).toContain(starred.id);
+    expect(ids).toContain(third.id);
+    expect(ids).not.toContain(plain.id);
+  });
 });

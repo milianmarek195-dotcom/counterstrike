@@ -119,6 +119,8 @@ export class LoadoutsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.loadoutItem.deleteMany({ where: { loadoutId: id } });
       await tx.loadoutItem.createMany({ data: rows.map(({ agent: _agent, ...r }) => r) });
+      // Only starred skins are kept permanently: an item that is in no loadout any more and has no star is dropped
+      await tx.inventoryItem.deleteMany({ where: { ownerId: userId, favorite: false, loadoutItems: { none: {} } } });
     });
     return view(await this.load(userId, id));
   }
