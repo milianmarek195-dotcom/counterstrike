@@ -144,6 +144,9 @@ public sealed partial class CeltistTournamentPlugin
         Server.ExecuteCommand("mp_match_can_clinch 1");
         Server.ExecuteCommand("sv_pausable 1");
         Server.ExecuteCommand("mp_autokick 0");
+        // a vote kick removes the player but does not lock them out: they can reconnect at once (the backend still decides who may join)
+        Server.ExecuteCommand("sv_vote_kick_ban_duration 0");
+        Server.ExecuteCommand("removeallids");
         // the warmup is a fixed countdown (players may still connect and buy), not an endless wait; "Match starten" ends it early
         Server.ExecuteCommand("mp_warmup_pausetimer 0");
         Server.ExecuteCommand($"mp_warmuptime {Math.Clamp(Config.WarmupSeconds, 10, 600)}");

@@ -62,6 +62,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
         _ = Task.Run(() => CommandLoopAsync(_cts.Token));
         _ = SendHeartbeatAsync();
         _ = LoadAgentModelsAsync();
+        Server.ExecuteCommand("sv_vote_kick_ban_duration 0");
         _status = "READY";
         Logger.LogInformation("[Celtist] started, API {Url}, server {Id}", Config.ApiUrl, Config.ServerId);
     }
