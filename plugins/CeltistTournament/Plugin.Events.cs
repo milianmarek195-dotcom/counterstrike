@@ -238,7 +238,7 @@ public sealed partial class CeltistTournamentPlugin
                 {
                     var status = response.Json().GetProperty("status").GetString();
                     Logger.LogInformation("[Celtist] map {Map} result accepted ({Status})", map.MapNumber, status);
-                    if (status == "MATCH_FINISHED") Server.NextFrame(() => { Server.PrintToChatAll(" \x04[Celtist]\x01 Match finished. Thanks for playing!"); AddTimer(30f, ResetMatch); });
+                    if (status == "MATCH_FINISHED") Server.NextFrame(() => { Server.PrintToChatAll(" \x04[Celtist]\x01 Match finished. Thanks for playing!"); AddTimer(15f, ResetMatch); });
                     return;
                 }
                 if (response.Status is >= 400 and < 500 and not 429)

@@ -75,6 +75,8 @@ export class MatchFinalizerService {
     if (!current) throw conflict('NO_OPEN_MAP', 'All maps of this match already have a result');
 
     const roster = match.teams.flatMap((t) => t.players.map((p) => ({ steamId: p.steamId, team: t.slot })));
+    // The plugin restarts its own clock after a restart in the middle of a map; the backend knows when the match really started.
+    const reportedStart = match.startedAt && match.startedAt.getTime() < payload.startedAt.getTime() ? { ...payload, startedAt: match.startedAt } : payload;
     const validation = validateMapResult(
       {
         matchId: match.id,
@@ -85,7 +87,7 @@ export class MatchFinalizerService {
         nowMs: this.clock.nowMs(),
         maxClockSkewMs: SIGNATURE_MAX_SKEW_MS,
       },
-      payload,
+      reportedStart,
     );
     if (!validation.ok) {
       this.logger.warn(`Rejected result for match ${match.id}: ${validation.errors.join('; ')}`);
