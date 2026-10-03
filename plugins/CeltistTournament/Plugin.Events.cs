@@ -82,6 +82,7 @@ public sealed partial class CeltistTournamentPlugin
             _skinTokens.Remove(player.SteamID);
             _glovesApplied.Remove(player.SteamID);
             _loadouts.Remove(player.SteamID);
+            _redeployed.Remove(player.SteamID);
         }
         return HookResult.Continue;
     }
@@ -95,7 +96,7 @@ public sealed partial class CeltistTournamentPlugin
         {
             var id = player.SteamID;
             if (!_loadouts.ContainsKey(id)) _ = ApplySkinsAsync(id);
-            _glovesApplied.Remove(id); // a new life starts with fresh gloves
+            _glovesApplied.Remove(id); _redeployed.Remove(id); // a new life starts with fresh gloves
             ScheduleSkins(id, 0.5f); // weapons and the player model exist a moment after the spawn event
         }
         return HookResult.Continue;

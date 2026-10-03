@@ -17,6 +17,8 @@ public sealed partial class CeltistTournamentPlugin
     private bool _dbgClear = true, _dbgPaint = true, _dbgMesh = true, _dbgExtras = true;
     // the first-person model is a separate entity from the weapon: changing its mesh group made the held skin disappear, so it stays off unless tested with !skindbg vm
     private bool _dbgViewModel;
+    private bool _dbgRedeploy = true;
+    private readonly Dictionary<ulong, string> _redeployed = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
     private readonly Dictionary<ulong, string> _glovesApplied = new();
 
@@ -134,6 +136,31 @@ public sealed partial class CeltistTournamentPlugin
             ApplyToWeapon(weapon, steamId, items);
         }
         UpdateViewModelMask(steamId);
+        RedeployActiveWeapon(steamId);
+    }
+
+    /// <summary>
+    /// The first-person model is built when a weapon is drawn. A skin that arrives afterwards shows on the weapon lying on the
+    /// ground but not in the hand, so the weapon in hand is put away and drawn again once after its skin was set.
+    /// </summary>
+    private void RedeployActiveWeapon(ulong steamId)
+    {
+        try
+        {
+            if (!_dbgRedeploy || !_loadouts.TryGetValue(steamId, out var all)) return;
+            var player = Utilities.GetPlayerFromSteamId(steamId);
+            var active = player?.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
+            if (!IsHuman(player) || !player!.PawnIsAlive || active is null || !active.IsValid || IsKnife(active.DesignerName)) return;
+            var def = active.AttributeManager.Item.ItemDefinitionIndex;
+            var item = ForCurrentSide(steamId, all).FirstOrDefault(i => i.WeaponDefIndex == def && i.Slot is not ("KNIFE" or "GLOVES"));
+            if (item is null) return;
+            var signature = $"{active.Index}:{def}:{item.PaintIndex}:{item.Pattern}";
+            if (_redeployed.TryGetValue(steamId, out var last) && last == signature) return;
+            _redeployed[steamId] = signature;
+            player.ExecuteClientCommand("lastinv");
+            AddTimer(0.25f, () => { if (player.IsValid && player.PawnIsAlive) player.ExecuteClientCommand("lastinv"); }, TimerFlags.STOP_ON_MAPCHANGE);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] weapon redeploy failed: {Message}", e.Message); }
     }
 
     /// <summary>
