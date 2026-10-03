@@ -1150,6 +1150,7 @@ model Skin {
   statTrakAvailable Boolean     @default(false)
   souvenirAvailable Boolean     @default(false)
   imageUrl          String?
+  legacyModel       Boolean     @default(false) // skin is made for the old weapon model (mesh group 2)
   modelPath         String? // agents: model resource path, e.g. characters/models/tm_professional/tm_professional_varf5.vmdl
   side              String?     @db.VarChar(2) // agents: T or CT
   priceMaxUsd       Float? // denormalised: highest known price across wears/variants

@@ -14,6 +14,7 @@ interface RawSkin {
   max_float?: number | null;
   stattrak?: boolean;
   souvenir?: boolean;
+  legacy_model?: boolean;
   paint_index?: string | number | null;
   phase?: string | null;
   rarity?: { name?: string };
@@ -76,6 +77,7 @@ export class CsgoApiCatalogSource extends SkinCatalogSource {
         existing.maxFloat = Math.max(existing.maxFloat, max);
         existing.statTrakAvailable ||= !!entry.stattrak;
         existing.souvenirAvailable ||= !!entry.souvenir;
+        existing.legacyModel ||= !!entry.legacy_model;
         continue;
       }
       bySkin.set(key, {
@@ -94,6 +96,7 @@ export class CsgoApiCatalogSource extends SkinCatalogSource {
         statTrakAvailable: !!entry.stattrak,
         souvenirAvailable: !!entry.souvenir,
         imageUrl: httpsOrNull(entry.image),
+        legacyModel: !!entry.legacy_model,
       });
     }
     try {

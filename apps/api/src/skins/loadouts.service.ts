@@ -24,7 +24,7 @@ const loadoutInclude = {
     include: {
       inventoryItem: {
         include: {
-          skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true, modelPath: true } },
+          skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true, modelPath: true, legacyModel: true } },
           stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
         },
       },
@@ -302,6 +302,7 @@ export class LoadoutsService {
           souvenir: it.souvenir,
           nameTag: it.nameTag,
           modelPath: row.skin?.modelPath ?? null,
+          legacyModel: row.skin?.legacyModel ?? false,
           stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear })),
         });
       }

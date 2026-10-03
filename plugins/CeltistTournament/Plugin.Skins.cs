@@ -10,7 +10,7 @@ namespace Celtist.Tournament;
 
 public sealed partial class CeltistTournamentPlugin
 {
-    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null);
+    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null, bool Legacy = false);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
@@ -61,7 +61,8 @@ public sealed partial class CeltistTournamentPlugin
                     i.GetProperty("team").GetString() ?? "T", i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
                     (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(),
                     i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null,
-                    i.TryGetProperty("modelPath", out var mp) && mp.ValueKind == JsonValueKind.String ? mp.GetString() : null));
+                    i.TryGetProperty("modelPath", out var mp) && mp.ValueKind == JsonValueKind.String ? mp.GetString() : null,
+                    i.TryGetProperty("legacyModel", out var lg) && lg.ValueKind == JsonValueKind.True));
             if (items.Count == 0) return;
             Server.NextFrame(() => { _loadouts[steamId] = items; ApplyToHeldWeapons(steamId); ApplyGloves(steamId); });
         }
@@ -80,6 +81,45 @@ public sealed partial class CeltistTournamentPlugin
             if (weapon is null || !weapon.IsValid) continue;
             ApplyToWeapon(weapon, steamId, items);
         }
+        UpdateViewModelMask(steamId);
+    }
+
+    /// <summary>
+    /// CS2 keeps the old (legacy) and the new weapon mesh in one model. A finish made for the old mesh looks scrambled on the
+    /// new one and the other way round, so the mesh group follows the finish: 2 = legacy, 1 = current.
+    /// </summary>
+    private static void SetMeshMask(CBaseEntity? entity, bool legacy)
+    {
+        try
+        {
+            var node = entity?.CBodyComponent?.SceneNode;
+            if (node is null) return;
+            var state = node.GetSkeletonInstance().ModelState;
+            var value = legacy ? 2UL : 1UL;
+            if (state.MeshGroupMask != value) state.MeshGroupMask = value;
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] mesh group failed: {Message}", e.Message); }
+    }
+
+    /// <summary>The first-person model of the weapon in hand needs the same mesh group as the weapon itself.</summary>
+    private void UpdateViewModelMask(ulong steamId)
+    {
+        try
+        {
+            if (!_loadouts.TryGetValue(steamId, out var all)) return;
+            var player = Utilities.GetPlayerFromSteamId(steamId);
+            var pawn = player?.PlayerPawn.Value;
+            var active = pawn?.WeaponServices?.ActiveWeapon.Value;
+            if (pawn?.ViewModelServices is null || active is null || !active.IsValid) return;
+            var items = ForCurrentSide(steamId, all);
+            var item = IsKnife(active.DesignerName)
+                ? items.FirstOrDefault(i => i.Slot == "KNIFE")
+                : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
+            if (item is null) return;
+            var viewModel = new CCSPlayer_ViewModelServices(pawn.ViewModelServices.Handle).ViewModel[0].Value;
+            SetMeshMask(viewModel, item.Legacy);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] view model mesh failed: {Message}", e.Message); }
     }
 
     /// <summary>
@@ -178,6 +218,7 @@ public sealed partial class CeltistTournamentPlugin
             weapon.FallbackWear = item.Float;
             weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+            SetMeshMask(weapon, item.Legacy);
             Logger.LogInformation("[Celtist] weapon {Name} def {Def} for {Steam}: paint {Paint}, seed {Seed}, wear {Wear}", weapon.DesignerName, def, steamId, item.PaintIndex, item.Pattern, item.Float);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not apply skin to weapon: {Message}", e.Message); }
@@ -210,6 +251,7 @@ public sealed partial class CeltistTournamentPlugin
         weapon.FallbackStatTrak = item.StatTrak ? item.StatTrakCount : -1;
         SetPaintAttributes(econ, item);
         Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
+        SetMeshMask(weapon, item.Legacy);
         Logger.LogInformation("[Celtist] knife for {Steam}: def {Def}, paint {Paint}, pattern {Seed}, float {Float}", steamId, item.WeaponDefIndex, item.PaintIndex, item.Pattern, item.Float);
     }
 

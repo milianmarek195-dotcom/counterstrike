@@ -23,6 +23,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
+        RegisterEventHandler<EventItemEquip>(OnItemEquip);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
         RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
         RegisterListener<Listeners.OnServerPrecacheResources>(manifest => { foreach (var model in _agentModels) manifest.AddResource(model); });
@@ -109,6 +110,17 @@ public sealed partial class CeltistTournamentPlugin
         return HookResult.Continue;
     }
 
+    private HookResult OnItemEquip(EventItemEquip e, GameEventInfo info)
+    {
+        var player = e.Userid;
+        if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
+        {
+            var id = player.SteamID;
+            AddTimer(0.05f, () => UpdateViewModelMask(id));
+        }
+        return HookResult.Continue;
+    }
+
     /// <summary>Picked-up and bought weapons get the loadout skin too.</summary>
     private HookResult OnItemPickup(EventItemPickup e, GameEventInfo info)
     {
@@ -121,12 +133,27 @@ public sealed partial class CeltistTournamentPlugin
         return HookResult.Continue;
     }
 
+    /// <summary>
+    /// Rounds played according to the game itself. The plugin's own counter starts at 0 after a plugin restart, which used to
+    /// put players back on their starting side after the half-time swap.
+    /// </summary>
+    private int RoundsNow()
+    {
+        try
+        {
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            if (rules is not null) return rules.TotalRoundsPlayed;
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] game rules unavailable: {Message}", e.Message); }
+        return _map?.RoundsPlayed ?? 0;
+    }
+
     private void PlaceOnSide(CCSPlayerController player, string slot)
     {
         if (_plan is null) return;
         var start = _map is null ? _plan.Maps.FirstOrDefault()?.TeamAStartSide ?? "CT" : _plan.Maps.FirstOrDefault(m => m.MapNumber == _map.MapNumber)?.TeamAStartSide ?? "CT";
         var maxRounds = _plan.RoundsToWin * 2 - 2;
-        var side = Sides.SideOf(slot, start, _map?.RoundsPlayed ?? 0, maxRounds);
+        var side = Sides.SideOf(slot, start, RoundsNow(), maxRounds);
         var team = side == "CT" ? CsTeam.CounterTerrorist : CsTeam.Terrorist;
         if (player.Team != team) player.ChangeTeam(team);
     }
@@ -154,7 +181,7 @@ public sealed partial class CeltistTournamentPlugin
         var start = _plan.Maps.FirstOrDefault(m => m.MapNumber == _map?.MapNumber)?.TeamAStartSide ?? "CT";
         var side = team == CsTeam.CounterTerrorist ? "CT" : "T";
         var maxRounds = _plan.RoundsToWin * 2 - 2;
-        return Sides.SideOf("A", start, _map?.RoundsPlayed ?? 0, maxRounds) == side ? "A" : "B";
+        return Sides.SideOf("A", start, RoundsNow(), maxRounds) == side ? "A" : "B";
     }
 
     private HookResult OnMatchEnd(EventCsWinPanelMatch e, GameEventInfo info)

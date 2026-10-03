@@ -18,6 +18,8 @@ export interface CatalogSkin {
   statTrakAvailable: boolean;
   souvenirAvailable: boolean;
   imageUrl: string | null;
+  /** The finish belongs to the old weapon model (CS2 keeps both meshes in one weapon). */
+  legacyModel?: boolean;
   /** Agents only. */
   modelPath?: string | null;
   side?: 'T' | 'CT' | null;

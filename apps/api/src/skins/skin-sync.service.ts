@@ -49,6 +49,7 @@ export class SkinSyncService {
             statTrakAvailable: s.statTrakAvailable,
             souvenirAvailable: s.souvenirAvailable,
             imageUrl: s.imageUrl,
+            legacyModel: s.legacyModel ?? false,
             modelPath: s.modelPath ?? null,
             side: s.side ?? null,
             active: true,

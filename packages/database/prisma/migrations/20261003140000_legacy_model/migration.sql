@@ -1,0 +1,1 @@
+ALTER TABLE "skins" ADD COLUMN "legacyModel" BOOLEAN NOT NULL DEFAULT false;
