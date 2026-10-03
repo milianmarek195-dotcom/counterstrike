@@ -156,7 +156,7 @@ public sealed partial class CeltistTournamentPlugin
 
     private void PlaceOnSide(CCSPlayerController player, string slot)
     {
-        if (_plan is null) return;
+        if (_plan is null || _freeSide.Contains(player.SteamID)) return;
         var start = _map is null ? _plan.Maps.FirstOrDefault()?.TeamAStartSide ?? "CT" : _plan.Maps.FirstOrDefault(m => m.MapNumber == _map.MapNumber)?.TeamAStartSide ?? "CT";
         var maxRounds = _plan.RoundsToWin * 2 - 2;
         var side = Sides.SideOf(slot, start, RoundsNow(), maxRounds);

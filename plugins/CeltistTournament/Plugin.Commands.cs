@@ -177,6 +177,8 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_ct", "Switch yourself to the CT side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.CounterTerrorist));
+        AddCommand("css_t", "Switch yourself to the T side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.Terrorist));
         AddCommand("css_test", "Test mode for listed players: endless warmup, endless money, buy anywhere", OnTestCommand);
         AddCommand("css_skindbg", "Debug: !skindbg clear|paint|mesh|extras switches one part of the weapon skin on or off", OnSkinDebugCommand);
         AddCommand("css_mesh", "Debug: flip the weapon model of the weapon in your hand and report the skin data", OnMeshCommand);
@@ -186,6 +188,18 @@ public sealed partial class CeltistTournamentPlugin
     }
 
     /// <summary>Helps to find out why a skin does not show: flips the mesh group of the held weapon and prints what is set on it.</summary>
+    /// <summary>Players who chose their side themselves: the match plan does not move them back at spawn.</summary>
+    private readonly HashSet<ulong> _freeSide = new();
+
+    private void OnSwitchSide(CCSPlayerController? player, CsTeam team)
+    {
+        if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
+        if (_map is not null) { player.PrintToChat(" No side change while a match map is running."); return; }
+        _freeSide.Add(player.SteamID);
+        player.ChangeTeam(team);
+        player.PrintToChat($" [Celtist] You are now {(team == CsTeam.CounterTerrorist ? "CT" : "T")}.");
+    }
+
     private bool _testMode;
     private bool _testTimerStarted;
 
