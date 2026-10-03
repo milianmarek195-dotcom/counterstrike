@@ -190,7 +190,9 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
             Server.NextFrame(() =>
             {
                 if (_plan is not null) return;
+                _recoveringMatch = true;
                 var (ok, reason) = ExecuteCommand("MATCH_PREPARE", matchId, payload);
+                _recoveringMatch = false;
                 Logger.LogInformation("[Celtist] recovered match {Match}: {Result}", matchId, ok ? "ok" : reason);
             });
         }

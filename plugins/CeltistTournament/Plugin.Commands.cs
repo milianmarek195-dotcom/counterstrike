@@ -31,8 +31,9 @@ public sealed partial class CeltistTournamentPlugin
                 _seriesWinsA = _seriesWinsB = 0;
                 _pausesUsed["A"] = _pausesUsed["B"] = 0;
                 _status = "IN_USE";
-                ConfigureServer(plan);
-                if (plan.Maps.Count > 0) ChangeMap(plan.Maps[0]);
+                // after a plugin restart the match is already running: keep its map and warmup/round state untouched
+                ConfigureServer(plan, startWarmup: !_recoveringMatch);
+                if (plan.Maps.Count > 0 && !(_recoveringMatch && Server.MapName == plan.Maps[0].Key)) ChangeMap(plan.Maps[0]);
                 Emit("match.configured");
                 return (true, null);
             }
@@ -107,7 +108,9 @@ public sealed partial class CeltistTournamentPlugin
         }
     }
 
-    private void ConfigureServer(MatchPlan plan)
+    private bool _recoveringMatch;
+
+    private void ConfigureServer(MatchPlan plan, bool startWarmup = true)
     {
         var maxRounds = plan.RoundsToWin * 2 - 2;
         Server.ExecuteCommand($"mp_maxrounds {maxRounds}");
@@ -118,7 +121,7 @@ public sealed partial class CeltistTournamentPlugin
         // the warmup is a fixed countdown (players may still connect and buy), not an endless wait; "Match starten" ends it early
         Server.ExecuteCommand("mp_warmup_pausetimer 0");
         Server.ExecuteCommand($"mp_warmuptime {Math.Clamp(Config.WarmupSeconds, 10, 600)}");
-        Server.ExecuteCommand("mp_warmup_start");
+        if (startWarmup) Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand($"mp_limitteams 0");
         Server.ExecuteCommand("mp_autoteambalance 0");
     }
