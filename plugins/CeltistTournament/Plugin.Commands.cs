@@ -191,7 +191,7 @@ public sealed partial class CeltistTournamentPlugin
         var on = pawn.MoveType != MoveType_t.MOVETYPE_NOCLIP;
         var type = on ? MoveType_t.MOVETYPE_NOCLIP : MoveType_t.MOVETYPE_WALK;
         pawn.MoveType = type;
-        Schema.SetSchemaValue(pawn.Handle, "CBaseEntity", "m_nActualMoveType", type);
+        pawn.ActualMoveType = type;
         Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
         player.PrintToChat($" [Celtist] Noclip {(on ? "on" : "off")}.");
     }
