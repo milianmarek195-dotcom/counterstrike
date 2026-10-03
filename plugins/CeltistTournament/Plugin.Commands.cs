@@ -148,6 +148,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_agent", "Toggle your agent (player model) from your loadout", OnAgentCommand);
         AddCommand("css_skch", "Admins: !skch <level 0-3> <player|all> [minutes]", OnSkch);
     }
 

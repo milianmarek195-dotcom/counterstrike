@@ -26,7 +26,7 @@ public sealed partial class CeltistTournamentPlugin
         AddTimer(delay, () =>
         {
             if (_skinTokens.GetValueOrDefault(steamId) != token) return;
-            if (Config.AgentsEnabled) ApplyAgent(steamId);
+            ApplyAgent(steamId);
             ApplyToHeldWeapons(steamId);
             ApplyGloves(steamId);
         }, TimerFlags.STOP_ON_MAPCHANGE);
@@ -223,8 +223,21 @@ public sealed partial class CeltistTournamentPlugin
         catch (Exception e) { Logger.LogWarning("[Celtist] agent list failed: {Message}", e.Message); }
     }
 
+    private readonly HashSet<ulong> _agentOptIn = new();
+
+    /// <summary>!agent: every player switches their own agent on or off (off = default model from the next spawn).</summary>
+    private void OnAgentCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid) return;
+        if (!Config.AgentsEnabled) { player.PrintToChat(" Agents are disabled on this server."); return; }
+        var id = player.SteamID;
+        if (!_agentOptIn.Remove(id)) { _agentOptIn.Add(id); player.PrintToChat(" [Celtist] Agent on - applied now and at every spawn."); ApplyAgent(id); }
+        else player.PrintToChat(" [Celtist] Agent off - your default model returns with the next spawn.");
+    }
+
     private void ApplyAgent(ulong steamId)
     {
+        if (!Config.AgentsEnabled || !_agentOptIn.Contains(steamId)) return;
         if (!_loadouts.TryGetValue(steamId, out var allItems)) return;
         var item = ForCurrentSide(steamId, allItems).FirstOrDefault(i => i.Slot == "AGENT" && !string.IsNullOrEmpty(i.ModelPath));
         var player = Utilities.GetPlayerFromSteamId(steamId);
@@ -233,7 +246,14 @@ public sealed partial class CeltistTournamentPlugin
         if (pawn is null || !pawn.IsValid) return;
         try
         {
-            pawn.SetModel(item.ModelPath!);
+            Server.NextFrame(() =>
+            {
+                if (!pawn.IsValid) return;
+                pawn.SetModel(item.ModelPath!);
+                // a swapped model comes up transparent unless the render colour is set again
+                pawn.Render = System.Drawing.Color.FromArgb(255, 255, 255, 255);
+                Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_clrRender");
+            });
             Logger.LogInformation("[Celtist] agent for {Steam}: {Model}", steamId, item.ModelPath);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] could not set agent model: {Message}", e.Message); }
