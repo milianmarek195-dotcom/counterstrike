@@ -88,7 +88,7 @@ public sealed partial class CeltistTournamentPlugin
     /// CS2 keeps the old (legacy) and the new weapon mesh in one model. A finish made for the old mesh looks scrambled on the
     /// new one and the other way round, so the mesh group follows the finish: 2 = legacy, 1 = current.
     /// </summary>
-    private static void SetMeshMask(CBaseEntity? entity, bool legacy)
+    private void SetMeshMask(CBaseEntity? entity, bool legacy)
     {
         try
         {
@@ -110,14 +110,14 @@ public sealed partial class CeltistTournamentPlugin
             var player = Utilities.GetPlayerFromSteamId(steamId);
             var pawn = player?.PlayerPawn.Value;
             var active = pawn?.WeaponServices?.ActiveWeapon.Value;
-            if (pawn?.ViewModelServices is null || active is null || !active.IsValid) return;
+            if (pawn is null || active is null || !active.IsValid) return;
             var items = ForCurrentSide(steamId, all);
             var item = IsKnife(active.DesignerName)
                 ? items.FirstOrDefault(i => i.Slot == "KNIFE")
                 : items.FirstOrDefault(i => i.WeaponDefIndex == active.AttributeManager.Item.ItemDefinitionIndex && i.Slot is not ("KNIFE" or "GLOVES"));
             if (item is null) return;
-            var viewModel = new CCSPlayer_ViewModelServices(pawn.ViewModelServices.Handle).ViewModel[0].Value;
-            SetMeshMask(viewModel, item.Legacy);
+            foreach (var viewModel in Utilities.FindAllEntitiesByDesignerName<CBaseViewModel>("predicted_viewmodel"))
+                if (viewModel.IsValid && viewModel.Weapon.Value?.Index == active.Index) SetMeshMask(viewModel, item.Legacy);
         }
         catch (Exception e) { Logger.LogWarning("[Celtist] view model mesh failed: {Message}", e.Message); }
     }
