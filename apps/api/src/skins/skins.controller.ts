@@ -255,6 +255,13 @@ export class SkinsGatewayController {
     private readonly prisma: PrismaService,
   ) {}
 
+  /** Model resources of all agents: the server precaches them on map start so a player model can be switched at spawn. */
+  @Get('agent-models')
+  async agentModels() {
+    const rows = await this.prisma.skin.findMany({ where: { slot: 'AGENT', active: true, modelPath: { not: null } }, select: { modelPath: true } });
+    return { models: [...new Set(rows.map((r) => r.modelPath!))] };
+  }
+
   /** The loadout to apply for a player, already filtered by their current permission. Returns nothing unless skins are enabled. */
   @Get('loadouts/:steamId')
   async loadout(@Req() req: Request, @Param('steamId', { schema: steamId64Schema }) steamId: string) {

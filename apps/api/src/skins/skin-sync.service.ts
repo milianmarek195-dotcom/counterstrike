@@ -49,6 +49,8 @@ export class SkinSyncService {
             statTrakAvailable: s.statTrakAvailable,
             souvenirAvailable: s.souvenirAvailable,
             imageUrl: s.imageUrl,
+            modelPath: s.modelPath ?? null,
+            side: s.side ?? null,
             active: true,
           };
           return this.prisma.skin.upsert({
@@ -98,6 +100,15 @@ export class SkinSyncService {
     for (const skin of skins) {
       const existing = new Map(skin.prices.map((p) => [`${p.wear}:${p.variant}`, p.priceUsd] as const));
       const variants: SkinVariant[] = ['NORMAL', ...(skin.statTrakAvailable ? (['STATTRAK'] as const) : []), ...(skin.souvenirAvailable ? (['SOUVENIR'] as const) : [])];
+      if (skin.slot === 'AGENT') {
+        const price = market.get(marketHashName(skin, 'NONE', 'NORMAL'));
+        if (price !== undefined) {
+          maxBySkin.set(skin.id, price);
+          if (existing.get('NONE:NORMAL') === undefined) creates.push({ skinId: skin.id, wear: 'NONE', variant: 'NORMAL', priceUsd: price, source: this.prices.name, fetchedAt: now });
+          else updates.push({ skinId: skin.id, wear: 'NONE', variant: 'NORMAL', priceUsd: price });
+        }
+        continue;
+      }
       for (const wearName of WEAR_NAMES) {
         const wear = wearEnumFor(wearName)!;
         for (const variant of variants) {

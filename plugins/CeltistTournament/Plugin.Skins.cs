@@ -9,7 +9,7 @@ namespace Celtist.Tournament;
 
 public sealed partial class CeltistTournamentPlugin
 {
-    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag);
+    private sealed record SkinItem(string Team, string Slot, int WeaponDefIndex, int PaintIndex, int Pattern, float Float, bool StatTrak, int StatTrakCount, string? NameTag, string? ModelPath = null);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
 
@@ -38,7 +38,8 @@ public sealed partial class CeltistTournamentPlugin
                 items.Add(new SkinItem(
                     i.GetProperty("team").GetString() ?? "T", i.GetProperty("slot").GetString() ?? "", i.GetProperty("weaponDefIndex").GetInt32(), i.GetProperty("paintIndex").GetInt32(), i.GetProperty("pattern").GetInt32(),
                     (float)i.GetProperty("float").GetDouble(), i.GetProperty("statTrak").GetBoolean(), i.GetProperty("statTrakCount").GetInt32(),
-                    i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null));
+                    i.TryGetProperty("nameTag", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null,
+                    i.TryGetProperty("modelPath", out var mp) && mp.ValueKind == JsonValueKind.String ? mp.GetString() : null));
             if (items.Count == 0) return;
             Server.NextFrame(() => { _loadouts[steamId] = items; ApplyToHeldWeapons(steamId); ApplyGloves(steamId); });
         }
@@ -183,6 +184,45 @@ public sealed partial class CeltistTournamentPlugin
         SetPaintAttributes(econ, item);
         Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager");
         Logger.LogInformation("[Celtist] knife for {Steam}: def {Def}, paint {Paint}, pattern {Seed}, float {Float}", steamId, item.WeaponDefIndex, item.PaintIndex, item.Pattern, item.Float);
+    }
+
+    // ───────────── agents (player models) ─────────────
+
+    private readonly List<string> _agentModels = new();
+
+    /// <summary>Loads the agent model list from the backend; the models are precached on the next map start.</summary>
+    private async Task LoadAgentModelsAsync()
+    {
+        if (!Config.SkinsEnabled || _api is null) return;
+        try
+        {
+            var response = await _api.GetAsync("/server/v1/agent-models").ConfigureAwait(false);
+            if (!response.Ok) return;
+            var models = response.Json().GetProperty("models").EnumerateArray().Select(m => m.GetString()).Where(m => !string.IsNullOrEmpty(m)).Cast<string>().ToList();
+            Server.NextFrame(() => { _agentModels.Clear(); _agentModels.AddRange(models); Logger.LogInformation("[Celtist] {Count} agent models known", models.Count); });
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] agent list failed: {Message}", e.Message); }
+    }
+
+    private void PrecacheAgents(ResourceManifest manifest)
+    {
+        foreach (var model in _agentModels) manifest.AddResource(model);
+    }
+
+    private void ApplyAgent(ulong steamId)
+    {
+        if (!_loadouts.TryGetValue(steamId, out var allItems)) return;
+        var item = ForCurrentSide(steamId, allItems).FirstOrDefault(i => i.Slot == "AGENT" && !string.IsNullOrEmpty(i.ModelPath));
+        var player = Utilities.GetPlayerFromSteamId(steamId);
+        if (item is null || !IsHuman(player) || !player!.PawnIsAlive) return;
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid) return;
+        try
+        {
+            pawn.SetModel(item.ModelPath!);
+            Logger.LogInformation("[Celtist] agent for {Steam}: {Model}", steamId, item.ModelPath);
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] could not set agent model: {Message}", e.Message); }
     }
 
     // ───────────── gloves ─────────────

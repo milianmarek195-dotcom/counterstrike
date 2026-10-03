@@ -49,6 +49,7 @@ export class SkinsService {
         statTrakAvailable: s.statTrakAvailable,
         souvenirAvailable: s.souvenirAvailable,
         imageUrl: s.imageUrl,
+        side: s.side,
         priceMaxUsd: s.priceMaxUsd,
         priceUpdatedAt: s.priceUpdatedAt,
         // Highest level any wear of this skin may need (conservative; see detail for per-wear levels).

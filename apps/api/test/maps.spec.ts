@@ -22,13 +22,13 @@ describe('maps, pools and veto templates', () => {
   it('serves the seeded default maps and pools publicly', async () => {
     const maps = await as(t, null).get('/v1/maps').expect(200);
     expect(maps.body.maps.map((m: { name: string }) => m.name)).toEqual([
-      'Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis', 'Overpass', 'Dust2', 'Vertigo',
+      'Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis', 'Overpass', 'Dust2', 'Cache', 'Vertigo',
     ]);
     const wingman = await as(t, null).get('/v1/maps?mode=WINGMAN').expect(200);
     expect(wingman.body.maps.map((m: { key: string }) => m.key)).toEqual(['de_inferno', 'de_nuke', 'de_overpass', 'de_vertigo']);
     const pools = await as(t, null).get('/v1/map-pools').expect(200);
     expect(pools.body.pools).toHaveLength(2);
-    expect(pools.body.pools.find((p: { mode: string }) => p.mode === 'FIVE_V_FIVE').maps).toHaveLength(8);
+    expect(pools.body.pools.find((p: { mode: string }) => p.mode === 'FIVE_V_FIVE').maps).toHaveLength(9);
   });
 
   it('keeps maps configurable: nothing is hard-coded', async () => {

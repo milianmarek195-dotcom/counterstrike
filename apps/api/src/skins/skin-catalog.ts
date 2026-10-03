@@ -18,6 +18,9 @@ export interface CatalogSkin {
   statTrakAvailable: boolean;
   souvenirAvailable: boolean;
   imageUrl: string | null;
+  /** Agents only. */
+  modelPath?: string | null;
+  side?: 'T' | 'CT' | null;
 }
 
 export interface CatalogSticker {
@@ -72,6 +75,7 @@ export const WEAR_NAMES = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-
 
 /** The market name of one wear/variant of a skin, e.g. "★ StatTrak™ Karambit | Doppler (Factory New)". */
 export function marketHashName(skin: { weaponName: string; name: string; slot: LoadoutSlot }, wear: string, variant: 'NORMAL' | 'STATTRAK' | 'SOUVENIR'): string {
+  if (skin.slot === 'AGENT') return skin.weaponName; // agents have a plain market name, no wear
   const star = skin.slot === 'KNIFE' || skin.slot === 'GLOVES' ? '★ ' : '';
   const prefix = variant === 'STATTRAK' ? 'StatTrak™ ' : variant === 'SOUVENIR' ? 'Souvenir ' : '';
   const base = skin.name ? `${skin.weaponName} | ${skin.name}` : skin.weaponName;

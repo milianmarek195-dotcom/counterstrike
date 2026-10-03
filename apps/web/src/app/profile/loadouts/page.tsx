@@ -10,7 +10,7 @@ type Side = 'T' | 'CT';
 type Team = 'BOTH' | Side;
 
 interface Weapon { weaponDefIndex: number; weaponName: string; slot: string; skins: number }
-interface Skin { id: string; name: string; phase: string | null; weaponName: string; weaponDefIndex: number; slot: string; paintIndex: number; rarity: string | null; imageUrl: string | null; minFloat: number; maxFloat: number; statTrakAvailable: boolean; souvenirAvailable: boolean; priceMaxUsd: number | null; requiredLevel: number }
+interface Skin { id: string; name: string; phase: string | null; weaponName: string; weaponDefIndex: number; slot: string; paintIndex: number; rarity: string | null; imageUrl: string | null; minFloat: number; maxFloat: number; statTrakAvailable: boolean; souvenirAvailable: boolean; priceMaxUsd: number | null; requiredLevel: number; side?: string | null }
 interface Sticker { id: string; name: string; imageUrl: string | null }
 interface ItemSkin { name: string; phase: string | null; weaponName: string; imageUrl: string | null; rarity: string | null }
 interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSkin | null; float: number; pattern: number; statTrak: boolean; statTrakCount: number; nameTag: string | null }
@@ -51,6 +51,7 @@ const COLUMNS: Array<{ title: string; sections: Array<{ label: string; slots: Sl
 ];
 const KNIFE_SLOT: Slot = { key: 'KNIFE', name: 'Messer', side: 'BOTH' };
 const GLOVES_SLOT: Slot = { key: 'GLOVES', name: 'Handschuhe', side: 'BOTH' };
+const AGENT_SLOT: Slot = { key: 'AGENT', name: 'Agent', side: 'BOTH' };
 
 const skinName = (name: string | null | undefined, phase?: string | null) => `${name && name.trim() ? name : 'Vanilla'}${phase ? ` · ${phase}` : ''}`;
 const img = (url: string | null | undefined, size = '256fx192f') => (url ? `${url}/${size}` : '');
@@ -58,7 +59,7 @@ const wearEnum = (f: number) => (f < 0.07 ? 'FACTORY_NEW' : f < 0.15 ? 'MINIMAL_
 const wearName = (f: number) => (f < 0.07 ? 'Factory New' : f < 0.15 ? 'Minimal Wear' : f < 0.38 ? 'Field-Tested' : f < 0.45 ? 'Well-Worn' : 'Battle-Scarred');
 
 /** Knives and gloves are one choice per side whatever the type; every other weapon is its own choice. */
-const keyOf = (item: Item) => (item.slot === 'KNIFE' || item.slot === 'GLOVES' ? item.slot : String(item.weaponDefIndex));
+const keyOf = (item: Item) => (item.slot === 'KNIFE' || item.slot === 'GLOVES' || item.slot === 'AGENT' ? item.slot : String(item.weaponDefIndex));
 
 type Equipped = Record<Side, Record<string, Item>>;
 
@@ -157,6 +158,7 @@ export default function SkinChanger() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[140px_1fr]">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-1 lg:content-start">
+          {cell(AGENT_SLOT)}
           {cell(GLOVES_SLOT)}
           {cell(KNIFE_SLOT)}
         </div>
@@ -221,11 +223,12 @@ function Picker({ slot, side, access, level, current, onClose, onEquip }: { slot
   const types = (weapons.data?.weapons ?? []).filter((w) => w.slot === slot.key);
   const [type, setType] = useState<number | null>(null);
   const weaponDef = isGroup ? (type ?? types[0]?.weaponDefIndex ?? null) : Number(slot.key);
-  const skins = useApi<{ skins: Skin[] }>(weaponDef ? `/skins?weaponDefIndex=${weaponDef}&pageSize=100` : null);
+  const isAgent = slot.key === 'AGENT';
+  const skins = useApi<{ skins: Skin[] }>(isAgent ? '/skins?slot=AGENT&pageSize=100' : weaponDef ? `/skins?weaponDefIndex=${weaponDef}&pageSize=100` : null);
   const [filter, setFilter] = useState('');
   const [skin, setSkin] = useState<Skin | null>(null);
   useEffect(() => { setSkin(null); }, [weaponDef]);
-  const list = (skins.data?.skins ?? []).filter((s) => !filter || skinName(s.name, s.phase).toLowerCase().includes(filter.toLowerCase()));
+  const list = (skins.data?.skins ?? []).filter((s) => !isAgent || s.side === side).filter((s) => !filter || skinName(s.name, s.phase).toLowerCase().includes(filter.toLowerCase()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 sm:p-6" role="dialog" aria-modal="true" aria-label={`${slot.name} Skin wählen`}>
@@ -260,7 +263,7 @@ function Picker({ slot, side, access, level, current, onClose, onEquip }: { slot
                         {s.imageUrl && <img src={img(s.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-full max-w-full object-contain" />}
                         {maybeLocked && <span title="Das genaue Level hängt von Abnutzung und StatTrak ab (siehe Editor)" className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white"><Lock size={11} />bis Lvl {s.requiredLevel}</span>}
                       </div>
-                      <div className="p-2"><div className="truncate text-sm font-semibold">{skinName(s.name, s.phase)}</div><div className="truncate text-xs text-muted">{s.rarity ?? ''}{s.priceMaxUsd === null ? ' · Preis unbekannt' : ` · bis $${Math.round(s.priceMaxUsd)}`}</div></div>
+                      <div className="p-2"><div className="truncate text-sm font-semibold">{isAgent ? s.weaponName : skinName(s.name, s.phase)}</div><div className="truncate text-xs text-muted">{s.rarity ?? ''}{s.priceMaxUsd === null ? ' · Preis unbekannt' : ` · bis $${Math.round(s.priceMaxUsd)}`}</div></div>
                     </button>
                   );
                 })}
@@ -287,17 +290,18 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<'SIDE' | 'BOTH'>('SIDE');
+  const isAgent = skin.slot === 'AGENT';
   const found = useApi<{ stickers: Sticker[] }>(pickSlot !== null && q.length >= 2 ? `/stickers?q=${encodeURIComponent(q)}&pageSize=12` : null);
   const detail = useApi<{ prices: PriceEntry[] }>(`/skins/${skin.id}`);
   const act = useAction();
 
-  const usedFloat = canFloat ? float : 0.07;
+  const usedFloat = isAgent ? 0.001 : canFloat ? float : 0.07;
   const variant = statTrak && skin.statTrakAvailable ? 'STATTRAK' : 'NORMAL';
-  const entry = detail.data?.prices.find((p) => p.wear === wearEnum(usedFloat) && p.variant === variant);
+  const entry = detail.data?.prices.find((p) => (isAgent ? p.wear === 'NONE' : p.wear === wearEnum(usedFloat)) && p.variant === variant);
   const needed = detail.data ? (entry?.requiredLevel ?? 3) : skin.requiredLevel;
   const locked = needed > level;
   const patternValid = /^\d{1,4}$/.test(pattern) && Number(pattern) <= 1000;
-  const canStickers = skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES';
+  const canStickers = skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' && !isAgent;
 
   const save = () => void act.run(async () => {
     const created = await api<Item>('/inventory', {
@@ -308,8 +312,8 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
         stickers: stickers.flatMap((s, i) => (s ? [{ stickerId: s.sticker.id, slotIndex: i, wear: s.wear, rotation: s.rotation, scale: s.scale }] : [])),
       },
     });
-    const item: Item = { ...created, skin: { name: skin.name, phase: skin.phase, weaponName: skin.weaponName, imageUrl: skin.imageUrl, rarity: skin.rarity }, float: usedFloat, pattern: Number(pattern), statTrak, statTrakCount: 0, nameTag: nameTag || null, slot: skin.slot, weaponDefIndex: skin.weaponDefIndex };
-    onEquip(scope === 'BOTH' ? ['T', 'CT'] : [side], item);
+    const item: Item = { ...created, skin: { name: isAgent ? skin.weaponName : skin.name, phase: skin.phase, weaponName: skin.weaponName, imageUrl: skin.imageUrl, rarity: skin.rarity }, float: usedFloat, pattern: Number(pattern), statTrak, statTrakCount: 0, nameTag: nameTag || null, slot: skin.slot, weaponDefIndex: skin.weaponDefIndex };
+    onEquip(scope === 'BOTH' && !isAgent ? ['T', 'CT'] : [side], item);
   });
 
   return (
@@ -318,23 +322,23 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
         {skin.imageUrl && <img src={img(skin.imageUrl, '360fx270f')} alt={`${skin.weaponName} | ${skinName(skin.name, skin.phase)}`} referrerPolicy="no-referrer" className="max-h-full object-contain" />}
       </div>
       <div>
-        <h3 className="text-xl">{skin.weaponName} | {skinName(skin.name, skin.phase)}</h3>
-        <p className="text-xs text-muted">{skin.rarity} · {entry ? `${wearName(usedFloat)}${variant === 'STATTRAK' ? ' StatTrak' : ''}: ca. $${Math.round(entry.priceUsd)} → Level ${needed}` : detail.data ? `kein Marktpreis für diese Variante → Level ${needed}` : 'Preis wird geladen …'}</p>
+        <h3 className="text-xl">{isAgent ? skin.weaponName : `${skin.weaponName} | ${skinName(skin.name, skin.phase)}`}</h3>
+        <p className="text-xs text-muted">{skin.rarity} · {entry ? `${isAgent ? 'Agent' : wearName(usedFloat)}${variant === 'STATTRAK' ? ' StatTrak' : ''}: ca. ${Math.round(entry.priceUsd)} → Level ${needed}` : detail.data ? `kein Marktpreis für diese Variante → Level ${needed}` : 'Preis wird geladen …'}</p>
       </div>
 
-      <div>
+      {!isAgent && <div>
         <div className="mb-1 flex justify-between text-sm"><span className="text-muted">Float</span><span className="font-mono">{float.toFixed(4)} · {wearName(float)}</span></div>
         <input type="range" aria-label="Float" min={skin.minFloat} max={skin.maxFloat} step={0.0005} value={float} disabled={!canFloat} onChange={(e) => setFloat(Number(e.target.value))} className="w-full accent-[var(--primary)]" />
         {!canFloat && <p className="text-xs text-muted">Float-Bearbeitung ist für dich nicht freigeschaltet (Standardwert).</p>}
-      </div>
+      </div>}
 
-      <div>
+      {!isAgent && <div>
         <div className="flex items-end gap-2">
           <Input label="Pattern (ganze Zahl 0–1000)" inputMode="numeric" value={pattern} aria-invalid={!patternValid} onChange={(e) => setPattern(e.target.value.replace(/[^\d]/g, ''))} />
           <Button variant="secondary" type="button" onClick={() => setPattern(String(Math.floor(Math.random() * 1001)))}>Zufall</Button>
         </div>
         {!patternValid && <p className="mt-1 text-xs text-danger">Das Pattern muss eine ganze Zahl von 0 bis 1000 sein.</p>}
-      </div>
+      </div>}
 
       {skin.statTrakAvailable && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={statTrak} onChange={(e) => setStatTrak(e.target.checked)} />StatTrak™</label>}
       {canStickers && <Input label={`Name-Tag (max. ${NAME_TAG_MAX})`} maxLength={NAME_TAG_MAX} value={nameTag} onChange={(e) => setNameTag(e.target.value)} />}
@@ -374,7 +378,7 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
         </div>
       )}
 
-      <fieldset className="rounded-md border p-2">
+      {!isAgent && <fieldset className="rounded-md border p-2">
         <legend className="px-1 text-xs uppercase tracking-wider text-muted">Gilt für</legend>
         <div className="flex gap-2">
           {([['SIDE', `Nur ${side}`], ['BOTH', 'Beide Seiten (T + CT)']] as const).map(([value, label]) => (
@@ -384,11 +388,12 @@ function Editor({ skin, slot, side, access, level, onEquip }: { skin: Skin; slot
           ))}
         </div>
         <p className="mt-1 text-xs text-muted">{slot.name}: Mit „Nur {side}“ kann die andere Seite einen anderen Skin tragen.</p>
-      </fieldset>
+      </fieldset>}
+      {isAgent && <p className="text-xs text-muted">Agenten gelten nur für ihre eigene Seite ({side}). Das Modell wird beim Spawn gesetzt.</p>}
 
       {locked && <p className="flex items-center gap-1.5 rounded-md bg-warning/15 p-2 text-sm text-warning"><Lock size={14} />Diese Variante braucht Level {needed} (du hast {level}). Eine stärkere Abnutzung oder ohne StatTrak ist oft günstiger.</p>}
       {act.error && <ErrorBox message={act.error} />}
-      <Button className="w-full" disabled={locked || !patternValid || act.busy} onClick={save}>Ausrüsten</Button>
+      <Button className="w-full" disabled={locked || (!isAgent && !patternValid) || act.busy} onClick={save}>Ausrüsten</Button>
     </div>
   );
 }

@@ -64,6 +64,10 @@ export const envSchema = z
       .url()
       .default('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/stickers.json'),
 
+    AGENT_CATALOG_URL: z
+      .url()
+      .default('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/agents.json'),
+
     UPLOAD_DIR: z.string().default('./uploads'),
   })
   .superRefine((env, ctx) => {

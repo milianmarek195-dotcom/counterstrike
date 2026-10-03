@@ -25,6 +25,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
         RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
+        RegisterListener<Listeners.OnServerPrecacheResources>(PrecacheAgents);
         VirtualFunctions.GiveNamedItemFunc.Hook(OnGiveNamedItemPost, HookMode.Post);
     }
 
@@ -87,7 +88,7 @@ public sealed partial class CeltistTournamentPlugin
         {
             var id = player.SteamID;
             if (!_loadouts.ContainsKey(id)) _ = ApplySkinsAsync(id);
-            foreach (var delay in new[] { 0.3f, 1.2f }) AddTimer(delay, () => { ApplyToHeldWeapons(id); ApplyGloves(id); }); // weapons and the player model exist a moment after the spawn event; the second pass catches a late team change
+            foreach (var delay in new[] { 0.3f, 1.2f }) AddTimer(delay, () => { ApplyAgent(id); ApplyToHeldWeapons(id); ApplyGloves(id); }); // weapons and the player model exist a moment after the spawn event; the second pass catches a late team change
         }
         return HookResult.Continue;
     }
@@ -102,7 +103,7 @@ public sealed partial class CeltistTournamentPlugin
         if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
         {
             var id = player.SteamID;
-            foreach (var delay in new[] { 0.5f, 1.5f }) AddTimer(delay, () => { ApplyToHeldWeapons(id); ApplyGloves(id); });
+            foreach (var delay in new[] { 0.5f, 1.5f }) AddTimer(delay, () => { ApplyAgent(id); ApplyToHeldWeapons(id); ApplyGloves(id); });
         }
         return HookResult.Continue;
     }

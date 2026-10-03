@@ -30,6 +30,17 @@ interface RawSticker {
   image?: string;
 }
 
+interface RawAgent {
+  id: string;
+  name: string;
+  def_index?: string | number;
+  rarity?: { name?: string };
+  collections?: Array<{ name?: string }>;
+  team?: { id?: string };
+  image?: string;
+  model_player?: string;
+}
+
 const httpsOrNull = (url?: string): string | null => (url && url.startsWith('https://') ? url : null);
 
 /** Catalog from the community-maintained CSGO-API dataset (static JSON on GitHub; no key, versioned, mirrored on a CDN). */
@@ -85,7 +96,43 @@ export class CsgoApiCatalogSource extends SkinCatalogSource {
         imageUrl: httpsOrNull(entry.image),
       });
     }
+    try {
+      for (const agent of await this.fetchAgents()) bySkin.set(`${agent.weaponDefIndex}:0`, agent);
+    } catch (error) {
+      // agents are optional: a failing agent list must never block the weapon catalog
+      this.logger.warn(`Agent catalog failed: ${(error as Error).message}`);
+    }
     return [...bySkin.values()];
+  }
+
+  private async fetchAgents(): Promise<CatalogSkin[]> {
+    const raw = await this.json<RawAgent[]>(this.config.env.AGENT_CATALOG_URL);
+    const agents: CatalogSkin[] = [];
+    for (const a of raw) {
+      const defIndex = Number(a.def_index);
+      const side = a.team?.id === 'terrorists' ? 'T' : a.team?.id === 'counter-terrorists' ? 'CT' : null;
+      if (!Number.isInteger(defIndex) || defIndex <= 0 || !side || !a.model_player) continue;
+      agents.push({
+        externalId: a.id,
+        weaponDefIndex: defIndex,
+        weaponClass: 'agent',
+        weaponName: a.name.slice(0, 64),
+        slot: 'AGENT',
+        paintIndex: 0,
+        name: '',
+        rarity: a.rarity?.name ?? null,
+        collection: a.collections?.[0]?.name ?? null,
+        minFloat: 0,
+        maxFloat: 1,
+        statTrakAvailable: false,
+        souvenirAvailable: false,
+        imageUrl: httpsOrNull(a.image),
+        // the dataset lists the agents/ path; the game resource lives under characters/
+        modelPath: a.model_player.replace(/^agents\/models\//, 'characters/models/'),
+        side,
+      });
+    }
+    return agents;
   }
 
   override async fetchStickers(): Promise<CatalogSticker[]> {

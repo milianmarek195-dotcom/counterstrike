@@ -16,7 +16,7 @@ import { SkinPermissionsService } from './skin-permissions.service.js';
 import { SkinsService } from './skins.service.js';
 
 const itemInclude = {
-  skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true } },
+  skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true } },
   stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
 } satisfies Prisma.InventoryItemInclude;
 

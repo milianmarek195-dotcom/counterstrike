@@ -61,6 +61,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
         AddTimer(2f, () => _ = FlushOutboxAsync(), TimerFlags.REPEAT);
         _ = Task.Run(() => CommandLoopAsync(_cts.Token));
         _ = SendHeartbeatAsync();
+        _ = LoadAgentModelsAsync();
         _status = "READY";
         Logger.LogInformation("[Celtist] started, API {Url}, server {Id}", Config.ApiUrl, Config.ServerId);
     }

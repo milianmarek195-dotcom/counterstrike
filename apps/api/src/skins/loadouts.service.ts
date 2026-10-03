@@ -24,7 +24,7 @@ const loadoutInclude = {
     include: {
       inventoryItem: {
         include: {
-          skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true } },
+          skin: { select: { id: true, name: true, phase: true, weaponName: true, paintIndex: true, imageUrl: true, rarity: true, minFloat: true, maxFloat: true, side: true, modelPath: true } },
           stickers: { include: { sticker: { select: { id: true, defIndex: true, name: true, imageUrl: true } } }, orderBy: { slotIndex: 'asc' as const } },
         },
       },
@@ -93,17 +93,28 @@ export class LoadoutsService {
     await this.load(userId, id);
     const ids = items.map((i) => i.inventoryItemId);
     if (new Set(ids).size !== ids.length) throw badRequest('DUPLICATE_ITEM', 'An inventory item can only be used once per loadout');
-    const owned = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, ownerId: userId } });
+    const owned = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, ownerId: userId }, include: { skin: { select: { side: true } } } });
     if (owned.length !== ids.length) throw notFound('INVENTORY_ITEM_NOT_FOUND', 'One of the items is not in your inventory');
     const byId = new Map(owned.map((o) => [o.id, o] as const));
-    const rows = items.map((i) => ({ loadoutId: id, inventoryItemId: i.inventoryItemId, weaponDefIndex: byId.get(i.inventoryItemId)!.weaponDefIndex, team: i.team ?? ('BOTH' as const) }));
+    const rows = items.map((i) => {
+      const o = byId.get(i.inventoryItemId)!;
+      // an agent only exists for its own side
+      const team = o.slot === 'AGENT' ? ((o.skin?.side as 'T' | 'CT' | null) ?? 'T') : (i.team ?? ('BOTH' as const));
+      return { loadoutId: id, inventoryItemId: i.inventoryItemId, weaponDefIndex: o.weaponDefIndex, team, agent: o.slot === 'AGENT' };
+    });
     this.assertTeamSlots(rows);
+    this.assertOneAgentPerSide(rows);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.loadoutItem.deleteMany({ where: { loadoutId: id } });
-      await tx.loadoutItem.createMany({ data: rows });
+      await tx.loadoutItem.createMany({ data: rows.map(({ agent: _agent, ...r }) => r) });
     });
     return view(await this.load(userId, id));
+  }
+
+  private assertOneAgentPerSide(rows: ReadonlyArray<{ agent: boolean; team: 'BOTH' | 'T' | 'CT' }>): void {
+    const sides = rows.filter((r) => r.agent).map((r) => r.team);
+    if (new Set(sides).size !== sides.length) throw badRequest('DUPLICATE_AGENT', 'Only one agent per side can be equipped');
   }
 
   /** One item per weapon and side; BOTH cannot coexist with T or CT for the same weapon. */
@@ -280,6 +291,7 @@ export class LoadoutsService {
           statTrakCount: it.statTrakCount,
           souvenir: it.souvenir,
           nameTag: it.nameTag,
+          modelPath: row.skin?.modelPath ?? null,
           stickers: row.stickers.map((st) => ({ slot: st.slotIndex, defIndex: st.sticker.defIndex, wear: st.wear })),
         });
       }

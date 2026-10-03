@@ -79,6 +79,7 @@ export type ServerStatus = (typeof SERVER_STATUSES)[number];
 export const LOADOUT_SLOTS = [
   'KNIFE',
   'GLOVES',
+  'AGENT',
   'PISTOL',
   'RIFLE',
   'AWP',
