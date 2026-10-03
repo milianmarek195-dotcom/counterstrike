@@ -4,6 +4,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Celtist.Tournament;
@@ -176,6 +177,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_test", "Test mode for listed players: endless warmup, endless money, buy anywhere", OnTestCommand);
         AddCommand("css_skindbg", "Debug: !skindbg clear|paint|mesh|extras switches one part of the weapon skin on or off", OnSkinDebugCommand);
         AddCommand("css_mesh", "Debug: flip the weapon model of the weapon in your hand and report the skin data", OnMeshCommand);
         AddCommand("css_noclip", "Fly through walls (listed players, outside of a running match)", OnNoclipCommand);
@@ -184,6 +186,56 @@ public sealed partial class CeltistTournamentPlugin
     }
 
     /// <summary>Helps to find out why a skin does not show: flips the mesh group of the held weapon and prints what is set on it.</summary>
+    private bool _testMode;
+    private bool _testTimerStarted;
+
+    /// <summary>
+    /// !test: endless warmup, money topped up every second and buying anywhere. Only for listed players and only while no
+    /// match map is running; a second !test switches everything back to the normal match settings.
+    /// </summary>
+    private void OnTestCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
+        if (_map is not null) { player.PrintToChat(" No test mode while a match map is running."); return; }
+        _testMode = !_testMode;
+        if (_testMode)
+        {
+            Server.ExecuteCommand("mp_warmup_pausetimer 1");
+            Server.ExecuteCommand("mp_warmup_start");
+            Server.ExecuteCommand("mp_buy_anywhere 1");
+            Server.ExecuteCommand("mp_buytime 9999");
+            Server.ExecuteCommand("mp_maxmoney 65535");
+            Server.ExecuteCommand("mp_startmoney 65535");
+            if (!_testTimerStarted)
+            {
+                _testTimerStarted = true;
+                AddTimer(1f, TopUpMoney, TimerFlags.REPEAT);
+            }
+            TopUpMoney();
+        }
+        else
+        {
+            Server.ExecuteCommand("mp_warmup_pausetimer 0");
+            Server.ExecuteCommand("mp_buy_anywhere 0");
+            Server.ExecuteCommand("mp_buytime 20");
+            Server.ExecuteCommand("mp_maxmoney 16000");
+            Server.ExecuteCommand("mp_startmoney 800");
+        }
+        Server.PrintToChatAll($" [Celtist] Test mode {(_testMode ? "on: endless warmup, endless money" : "off")}.");
+    }
+
+    private void TopUpMoney()
+    {
+        if (!_testMode) return;
+        foreach (var p in Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false } && Config.NoclipSteamIds.Contains(p.SteamID.ToString())))
+        {
+            var money = p.InGameMoneyServices;
+            if (money is null || money.Account >= 60000) continue;
+            money.Account = 65535;
+            Utilities.SetStateChanged(p, "CCSPlayerController", "m_pInGameMoneyServices");
+        }
+    }
+
     private void OnSkinDebugCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || !player.IsValid || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
