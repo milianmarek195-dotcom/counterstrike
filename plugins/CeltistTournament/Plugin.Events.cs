@@ -23,7 +23,6 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
-        RegisterEventHandler<EventItemEquip>(OnItemEquip);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
         RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
         RegisterListener<Listeners.OnMapStart>(_ => { _stamped.Clear(); _glovesApplied.Clear(); });
@@ -113,17 +112,6 @@ public sealed partial class CeltistTournamentPlugin
         {
             var id = player.SteamID;
             ScheduleSkins(id, 0.8f);
-        }
-        return HookResult.Continue;
-    }
-
-    private HookResult OnItemEquip(EventItemEquip e, GameEventInfo info)
-    {
-        var player = e.Userid;
-        if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
-        {
-            var id = player.SteamID;
-            AddTimer(0.05f, () => UpdateViewModelMask(id));
         }
         return HookResult.Continue;
     }
