@@ -25,7 +25,7 @@ public sealed partial class CeltistTournamentPlugin
         RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
         RegisterEventHandler<EventItemPickup>(OnItemPickup);
         RegisterListener<Listeners.OnEntitySpawned>(OnWeaponSpawned);
-        RegisterListener<Listeners.OnServerPrecacheResources>(PrecacheAgents);
+        RegisterListener<Listeners.OnServerPrecacheResources>(manifest => { foreach (var model in _agentModels) manifest.AddResource(model); });
         VirtualFunctions.GiveNamedItemFunc.Hook(OnGiveNamedItemPost, HookMode.Post);
     }
 

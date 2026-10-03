@@ -204,11 +204,6 @@ public sealed partial class CeltistTournamentPlugin
         catch (Exception e) { Logger.LogWarning("[Celtist] agent list failed: {Message}", e.Message); }
     }
 
-    private void PrecacheAgents(ResourceManifest manifest)
-    {
-        foreach (var model in _agentModels) manifest.AddResource(model);
-    }
-
     private void ApplyAgent(ulong steamId)
     {
         if (!_loadouts.TryGetValue(steamId, out var allItems)) return;
