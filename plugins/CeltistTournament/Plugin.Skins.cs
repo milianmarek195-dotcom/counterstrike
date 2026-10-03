@@ -30,6 +30,8 @@ public sealed partial class CeltistTournamentPlugin
             ApplyAgent(steamId);
             ApplyToHeldWeapons(steamId);
             ApplyGloves(steamId);
+            // a knife changes its type first and only takes the finish on a second pass a moment later
+            AddTimer(0.7f, () => { if (_skinTokens.GetValueOrDefault(steamId) == token) ApplyToHeldWeapons(steamId); }, TimerFlags.STOP_ON_MAPCHANGE);
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
