@@ -176,9 +176,29 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_mesh", "Debug: flip the weapon model of the weapon in your hand and report the skin data", OnMeshCommand);
         AddCommand("css_noclip", "Fly through walls (listed players, outside of a running match)", OnNoclipCommand);
         AddCommand("css_agent", "Toggle your agent (player model) from your loadout", OnAgentCommand);
         AddCommand("css_skch", "Admins: !skch <level 0-3> <player|all> [minutes]", OnSkch);
+    }
+
+    /// <summary>Helps to find out why a skin does not show: flips the mesh group of the held weapon and prints what is set on it.</summary>
+    private void OnMeshCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || !player.PawnIsAlive || !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) return;
+        var pawn = player.PlayerPawn.Value;
+        var weapon = pawn?.WeaponServices?.ActiveWeapon.Value;
+        if (pawn is null || weapon is null || !weapon.IsValid) return;
+        var node = weapon.CBodyComponent?.SceneNode;
+        if (node is null) return;
+        var state = node.GetSkeletonInstance().ModelState;
+        var econ = weapon.AttributeManager.Item;
+        player.PrintToChat($" [Celtist] {weapon.DesignerName} def {econ.ItemDefinitionIndex} paint {weapon.FallbackPaintKit} quality {econ.EntityQuality} itemid {econ.ItemID} mesh {state.MeshGroupMask}");
+        var next = state.MeshGroupMask == 2UL ? 1UL : 2UL;
+        state.MeshGroupMask = next;
+        foreach (var vm in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("predicted_viewmodel"))
+            if (vm.IsValid && vm.OwnerEntity.Value?.Index == pawn.Index) vm.CBodyComponent?.SceneNode?.GetSkeletonInstance().ModelState.MeshGroupMask = next;
+        player.PrintToChat($" [Celtist] mesh now {next} - type !mesh again to flip back");
     }
 
     private void OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
