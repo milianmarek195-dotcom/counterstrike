@@ -90,6 +90,7 @@ public sealed partial class CeltistTournamentPlugin
     {
         // If a connected player ended up on the wrong side (manual team change), put them back.
         var player = e.Userid;
+        if (_knifeRound && player is { IsValid: true }) AddTimer(0.3f, () => StripToKnife(player), TimerFlags.STOP_ON_MAPCHANGE);
         if (player is { IsBot: false, IsValid: true } && _plan?.SlotOf(player.SteamID) is { } slot) PlaceOnSide(player, slot);
         if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
         {
@@ -120,6 +121,8 @@ public sealed partial class CeltistTournamentPlugin
     private HookResult OnItemPickup(EventItemPickup e, GameEventInfo info)
     {
         var player = e.Userid;
+        // a knife round: whatever is picked up is taken away again right away
+        if (_knifeRound && player is { IsValid: true } && !(e.Item ?? string.Empty).Contains("knife", StringComparison.OrdinalIgnoreCase)) AddTimer(0.05f, () => StripToKnife(player), TimerFlags.STOP_ON_MAPCHANGE);
         if (Config.SkinsEnabled && player is { IsBot: false, IsValid: true })
         {
             var id = player.SteamID;

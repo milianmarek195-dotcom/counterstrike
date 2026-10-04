@@ -180,6 +180,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_kniferound", "Knife round: everybody keeps only the knife and cannot buy (admins), type again to end it", OnKnifeRoundCommand);
         AddCommand("css_legacy", "Switch the old CS:GO weapon models for legacy skins on or off (old models = old, slower animations)", OnLegacyCommand);
         AddCommand("css_unban", "Remove all server-side bans (vote kicks) or one SteamID64: !unban [steamid64]", OnUnbanCommand);
         AddCommand("css_ct", "Switch yourself to the CT side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.CounterTerrorist));
@@ -222,6 +223,58 @@ public sealed partial class CeltistTournamentPlugin
         ulong? target = ulong.TryParse(info.ArgString.Trim(), out var parsed) ? parsed : null;
         ClearGameBans(target);
         player.PrintToChat($" [Celtist] Server bans cleared{(target is null ? string.Empty : " for " + target)}.");
+    }
+
+    private bool _knifeRound;
+
+    /// <summary>The knife round is for admins and listed players, in friendly (CUSTOM) matches or without a match, never in tournament or ranked maps.</summary>
+    private void OnKnifeRoundCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid) return;
+        if (!IsAdmin(player) && !Config.NoclipSteamIds.Contains(player.SteamID.ToString())) { player.PrintToChat(" \x07Admins only."); return; }
+        if (_map is not null && !string.Equals(_plan?.KindName, "CUSTOM", StringComparison.OrdinalIgnoreCase)) { player.PrintToChat(" \x07No knife round in a tournament or ranked match."); return; }
+        _knifeRound = !_knifeRound;
+        if (_knifeRound)
+        {
+            Server.ExecuteCommand("mp_buytime 0");
+            Server.ExecuteCommand("mp_buy_anywhere 0");
+            Server.ExecuteCommand("mp_startmoney 0");
+            Server.ExecuteCommand("mp_maxmoney 0");
+            Server.ExecuteCommand("mp_afterroundmoney 0");
+            Server.ExecuteCommand("mp_t_default_secondary \"\"");
+            Server.ExecuteCommand("mp_ct_default_secondary \"\"");
+            Server.ExecuteCommand("mp_give_player_c4 0");
+        }
+        else
+        {
+            Server.ExecuteCommand("mp_buytime 20");
+            Server.ExecuteCommand("mp_startmoney 800");
+            Server.ExecuteCommand("mp_maxmoney 16000");
+            Server.ExecuteCommand("mp_afterroundmoney 0");
+            Server.ExecuteCommand("mp_t_default_secondary weapon_glock");
+            Server.ExecuteCommand("mp_ct_default_secondary weapon_hkp2000");
+            Server.ExecuteCommand("mp_give_player_c4 1");
+        }
+        Server.ExecuteCommand("mp_restartgame 1");
+        Server.PrintToChatAll($" \x04[Celtist]\x01 Knife round {(_knifeRound ? "on: everybody has only the knife, no buying. Type !kniferound again to end it." : "off: normal rounds again.")}");
+    }
+
+    /// <summary>Takes every weapon but the knife and the money of a player (knife round).</summary>
+    private void StripToKnife(CCSPlayerController? player)
+    {
+        if (!_knifeRound || player is null || !player.IsValid || !player.PawnIsAlive) return;
+        try
+        {
+            player.RemoveWeapons();
+            player.GiveNamedItem("weapon_knife");
+            var money = player.InGameMoneyServices;
+            if (money is not null && money.Account != 0)
+            {
+                money.Account = 0;
+                Utilities.SetStateChanged(player, "CCSPlayerController", "m_pInGameMoneyServices");
+            }
+        }
+        catch (Exception e) { Logger.LogWarning("[Celtist] knife round strip failed: {Message}", e.Message); }
     }
 
     private bool _testMode;
