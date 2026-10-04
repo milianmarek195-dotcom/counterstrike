@@ -23,7 +23,25 @@ public sealed partial class CeltistTournamentPlugin
         string? ModelPath, bool Legacy, List<StickerPart> Stickers, int KeychainDef, int KeychainSeed, float KeychainX, float KeychainY, float KeychainZ);
 
     private readonly Dictionary<ulong, List<SkinItem>> _loadouts = new();
+    /// <summary>
+    /// Players who turned the old weapon models off (!legacy): skins made for the old model then show on the new one, which can
+    /// look stretched on some weapons, but the new CS2 pull-out and inspect animations play.
+    /// </summary>
+    private readonly HashSet<ulong> _noLegacyModel = new();
     private readonly Dictionary<ulong, int> _skinTokens = new();
+
+    private void OnLegacyCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid) return;
+        var id = player.SteamID;
+        var off = _noLegacyModel.Add(id);
+        if (!off) _noLegacyModel.Remove(id);
+        player.PrintToChat(off
+            ? " \x04[Celtist]\x01 Old weapon models off: new CS2 animations, some skins may look stretched. Type !legacy again to switch back."
+            : " \x04[Celtist]\x01 Old weapon models on: skins look right, pull-out and inspect use the old slower animations.");
+        foreach (var key in _stamped.Where(kv => kv.Value.Owner == id).Select(kv => kv.Key).ToList()) _stamped.Remove(key);
+        RefreshWeapons(id);
+    }
     private readonly Dictionary<ulong, string> _glovesApplied = new();
     /// <summary>Weapons this plugin already wrote (entity index → item id + what was written), so a weapon is not rewritten on every trigger.</summary>
     private readonly Dictionary<uint, (ulong Id, string Signature, ulong Owner)> _stamped = new();
@@ -345,7 +363,8 @@ public sealed partial class CeltistTournamentPlugin
                 return;
             }
 
-            var signature = $"{steamId}:{Signature(item)}";
+            var legacy = item.Legacy && !_noLegacyModel.Contains(steamId);
+            var signature = $"{steamId}:{legacy}:{Signature(item)}";
             if (_stamped.TryGetValue(weapon.Index, out var done) && done.Signature == signature && done.Id == econ.ItemID) return; // already written exactly like this
 
             // 1. clean slate: the stickers, charm and StatTrak of the player's real Steam item must not shine through
@@ -395,7 +414,7 @@ public sealed partial class CeltistTournamentPlugin
             }
 
             // 4. a finish made for the old weapon model needs the old model: the "body" body group selects it
-            weapon.AcceptInput("SetBodygroup", value: $"body,{(item.Legacy ? 1 : 0)}");
+            weapon.AcceptInput("SetBodygroup", value: $"body,{(legacy ? 1 : 0)}");
 
             Utilities.SetStateChanged(weapon, "CEconEntity", "m_AttributeManager"); // the name tag is part of the networked item
             _stamped[weapon.Index] = (econ.ItemID, signature, steamId);

@@ -103,7 +103,8 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
             // real tick rate: game ticks per wall-clock second since the previous heartbeat (64 expected; lower = slow motion)
             var wall = _tickClock.Elapsed.TotalSeconds;
             double tickrate = 0;
-            if (_lastTicks > 0 && wall - _lastTickWall > 1) tickrate = Math.Round((ticks - _lastTicks) / (wall - _lastTickWall), 1);
+            // a map change restarts the tick counter: that interval has no meaningful rate
+            if (_lastTicks > 0 && ticks >= _lastTicks && wall - _lastTickWall > 1) tickrate = Math.Min(1000, Math.Round((ticks - _lastTicks) / (wall - _lastTickWall), 1));
             _lastTicks = ticks;
             _lastTickWall = wall;
             if (tickrate > 0 && tickrate < 55 && players > 0) Logger.LogWarning("[Celtist] server runs at {Rate} ticks/s (64 expected): players see slow motion", tickrate);

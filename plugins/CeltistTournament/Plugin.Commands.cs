@@ -180,6 +180,7 @@ public sealed partial class CeltistTournamentPlugin
         AddCommand("css_unpause", "Unpause the match", (p, _) => OnPauseCommand(p, false));
         AddCommand("css_nobans", "Admins: toggle automatic team-damage penalties for this match", OnNoBans);
         AddCommand("css_pardon", "Admins: !pardon <player> clears a player's team-damage counters", OnPardon);
+        AddCommand("css_legacy", "Switch the old CS:GO weapon models for legacy skins on or off (old models = old, slower animations)", OnLegacyCommand);
         AddCommand("css_unban", "Remove all server-side bans (vote kicks) or one SteamID64: !unban [steamid64]", OnUnbanCommand);
         AddCommand("css_ct", "Switch yourself to the CT side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.CounterTerrorist));
         AddCommand("css_t", "Switch yourself to the T side (listed players, outside of a running match)", (p, i) => OnSwitchSide(p, CsTeam.Terrorist));
