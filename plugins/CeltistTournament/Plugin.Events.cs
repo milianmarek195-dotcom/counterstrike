@@ -237,6 +237,12 @@ public sealed partial class CeltistTournamentPlugin
                 if (response.Status is >= 400 and < 500 and not 429)
                 {
                     Logger.LogError("[Celtist] result rejected by the backend: HTTP {Status} {Body}", response.Status, response.Body);
+                    // the match no longer exists or is closed (cancelled, deleted): nothing is left to report, the server is free again
+                    if (response.Status is 404 or 409 or 403)
+                    {
+                        Server.NextFrame(() => { if (_plan?.MatchId == plan.MatchId) ResetMatch(); });
+                        return;
+                    }
                     Server.NextFrame(() => { _status = "ERROR"; Emit("server.error", new() { ["message"] = Trim($"result rejected: {response.Body}", 300) }); });
                     return;
                 }

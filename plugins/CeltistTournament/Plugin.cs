@@ -108,6 +108,7 @@ public sealed partial class CeltistTournamentPlugin : BasePlugin, IPluginConfig<
             _lastTicks = ticks;
             _lastTickWall = wall;
             if (tickrate > 0 && tickrate < 55 && players > 0) Logger.LogWarning("[Celtist] server runs at {Rate} ticks/s (64 expected): players see slow motion", tickrate);
+            if (_status == "ERROR" && _plan is null) _status = "READY"; // an error without a match to blame is over
             var response = await _api.PostAsync("/server/v1/heartbeat", new
             {
                 status = _status,

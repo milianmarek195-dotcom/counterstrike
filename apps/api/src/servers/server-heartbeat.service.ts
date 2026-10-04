@@ -124,7 +124,7 @@ export class ServerHeartbeatService {
               matchId: null,
               type: 'MATCH_CANCEL',
               payload: { matchId: reported, reason: 'STALE_MATCH' },
-              idempotencyKey: `stale:${serverId}:${reported}`,
+              idempotencyKey: `stale:${serverId}:${reported}:${Math.floor(this.clock.nowMs() / 600_000)}`,
               expiresAt: new Date(this.clock.nowMs() + 10 * 60_000),
             },
           })
