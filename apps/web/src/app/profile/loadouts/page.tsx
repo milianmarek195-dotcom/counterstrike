@@ -25,6 +25,18 @@ interface PlacedSticker { sticker: Sticker; wear: number; rotation: number; scal
 
 const RARITY: Record<string, string> = { 'Consumer Grade': '#b0c3d9', 'Industrial Grade': '#5e98d9', 'Mil-Spec Grade': '#4b69ff', Restricted: '#8847ff', Classified: '#d32ce6', Covert: '#eb4b4b', Contraband: '#e4ae39', Extraordinary: '#eb4b4b' };
 const STICKER_SLOTS = 5;
+type Pos = { x: number; y: number; z: number };
+/** Starting points for where a charm hangs (game units, 0/0/0 = the weapon's default hang point). Fine tuning is done with the sliders. */
+const CHARM_PRESETS: Array<{ label: string; pos: Pos }> = [
+  { label: 'Standard', pos: { x: 0, y: 0, z: 0 } },
+  { label: 'Ganz vorne', pos: { x: 10, y: 0, z: 0 } },
+  { label: 'Vorne', pos: { x: 5, y: 0, z: 0 } },
+  { label: 'Hinten', pos: { x: -5, y: 0, z: 0 } },
+];
+const SAVED_POS_KEY = 'celtist.charmPos';
+const loadSavedPos = (): Pos | null => {
+  try { const raw = localStorage.getItem(SAVED_POS_KEY); return raw ? (JSON.parse(raw) as Pos) : null; } catch { return null; }
+};
 const NAME_TAG_MAX = 20;
 
 /** Weapons in the order of the CS2 loadout screen. `side` = which team can buy/hold the weapon by default. */
@@ -366,7 +378,10 @@ function Editor({ skin, slot, side, access, level, onEquip, existing }: { skin: 
   const isAgent = skin.slot === 'AGENT';
   const [charm, setCharm] = useState<Charm | null>(existing?.keychain ?? null);
   const [charmSeed, setCharmSeed] = useState(String(existing?.keychainSeed ?? 0));
-  const [charmPos, setCharmPos] = useState({ x: existing?.keychainOffsetX ?? 0, y: existing?.keychainOffsetY ?? 0, z: existing?.keychainOffsetZ ?? 0 });
+  const [savedPos, setSavedPos] = useState<Pos | null>(null);
+  const [charmPos, setCharmPos] = useState<Pos>({ x: existing?.keychainOffsetX ?? 0, y: existing?.keychainOffsetY ?? 0, z: existing?.keychainOffsetZ ?? 0 });
+  // a new charm starts where the player last saved their favourite position
+  useEffect(() => { const p = loadSavedPos(); setSavedPos(p); if (p && !existing?.keychain) setCharmPos(p); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const charms = useApi<{ keychains: Charm[] }>(!isAgent && skin.slot !== 'KNIFE' && skin.slot !== 'GLOVES' ? '/keychains?pageSize=100' : null);
   const found = useApi<{ stickers: Sticker[] }>(pickSlot !== null && q.length >= 2 ? `/stickers?q=${encodeURIComponent(q)}&pageSize=12` : null);
   const detail = useApi<{ prices: PriceEntry[] }>(`/skins/${skin.id}`);
@@ -468,10 +483,17 @@ function Editor({ skin, slot, side, access, level, onEquip, existing }: { skin: 
           </div>
           {charm && (
             <div className="mt-2 space-y-1 rounded-md border p-2 text-xs">
-              <div className="text-muted">Position des Charms an der Waffe (0 = Standard)</div>
+              <div className="text-muted">Position des Charms an der Waffe</div>
+              <div className="flex flex-wrap gap-1">
+                {CHARM_PRESETS.map((p) => (
+                  <button key={p.label} type="button" onClick={() => setCharmPos(p.pos)} className={cn('rounded border px-2 py-0.5 hover:bg-card-hover', charmPos.x === p.pos.x && charmPos.y === p.pos.y && charmPos.z === p.pos.z && 'border-primary bg-primary/15 text-primary')}>{p.label}</button>
+                ))}
+                {savedPos && <button type="button" onClick={() => setCharmPos(savedPos)} className="rounded border px-2 py-0.5 hover:bg-card-hover">Meine Position</button>}
+              </div>
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <label key={axis} className="flex items-center gap-2"><span className="w-6 uppercase text-muted">{axis}</span><input type="range" min={-10} max={10} step={0.1} value={charmPos[axis]} onChange={(e) => setCharmPos({ ...charmPos, [axis]: Number(e.target.value) })} className="flex-1 accent-[var(--primary)]" /><span className="w-10 text-right font-mono">{charmPos[axis].toFixed(1)}</span></label>
               ))}
+              <button type="button" className="rounded border px-2 py-0.5 hover:bg-card-hover" onClick={() => { try { localStorage.setItem(SAVED_POS_KEY, JSON.stringify(charmPos)); } catch { /* storage may be blocked */ } setSavedPos(charmPos); }}>Als meine Standard-Position merken</button>
             </div>
           )}
           {charm && <div className="mt-1 flex items-end gap-2"><span className="flex-1 truncate text-xs text-muted">{charm.name}</span><div className="w-28"><Input label="Charm-Muster" inputMode="numeric" value={charmSeed} onChange={(e) => setCharmSeed(e.target.value.replace(/[^\d]/g, '').slice(0, 5))} /></div></div>}
