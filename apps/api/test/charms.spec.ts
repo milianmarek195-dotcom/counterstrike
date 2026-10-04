@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SkinCatalogSource, SkinPriceProvider, type CatalogKeychain, type CatalogSkin } from '../src/skins/skin-catalog.js';
+import { LoadoutsService } from '../src/skins/loadouts.service.js';
 import { SkinSyncService } from '../src/skins/skin-sync.service.js';
 import { SkinsModule } from '../src/skins/skins.module.js';
 import { as, createUser, type TestUser } from './support/auth.js';
@@ -73,5 +74,34 @@ describe('charms', () => {
     expect(ids).toContain(starred.id);
     expect(ids).toContain(third.id);
     expect(ids).not.toContain(plain.id);
+  });
+
+  it('applies one loadout on T and another on CT', async () => {
+    const glock = (await t.prisma.skin.findFirstOrThrow({ where: { weaponDefIndex: 4 } })).id;
+    const mk = async (seed: number) => (await as(t, player).post('/v1/inventory', { slot: 'PISTOL', weaponDefIndex: 4, skinId: glock, floatValue: 0.01, paintSeed: seed }).expect(201)).body;
+    const red = (await as(t, player).post('/v1/loadouts', { name: 'Rot' }).expect(201)).body;
+    const redItem = await mk(111);
+    await as(t, player).put(`/v1/loadouts/${red.id}/items`, { items: [{ inventoryItemId: redItem.id }] }).expect(200);
+    const green = (await as(t, player).post('/v1/loadouts', { name: 'Gruen' }).expect(201)).body;
+    const greenItem = await mk(222);
+    await as(t, player).put(`/v1/loadouts/${green.id}/items`, { items: [{ inventoryItemId: greenItem.id }] }).expect(200);
+    await as(t, player).post(`/v1/loadouts/${red.id}/activate`).expect(201); // default for both sides
+    const patternOf = async (team: string) => {
+      const res = await t.app.get(LoadoutsService).resolveForServer(player.steamId);
+      return (res.items as Array<{ team: string; pattern: number }>).find((x) => x.team === team)?.pattern;
+    };
+    expect(await patternOf('T')).toBe(111);
+    expect(await patternOf('CT')).toBe(111);
+    // green only for T
+    const view = (await as(t, player).put(`/v1/loadouts/${green.id}/side`, { side: 'T', active: true }).expect(200)).body;
+    expect(view.activeT).toBe(true);
+    expect(await patternOf('T')).toBe(222);
+    expect(await patternOf('CT')).toBe(111);
+    // moving the T flag to red clears it from green
+    await as(t, player).put(`/v1/loadouts/${red.id}/side`, { side: 'T', active: true }).expect(200);
+    const list = (await as(t, player).get('/v1/loadouts').expect(200)).body.loadouts;
+    expect(list.find((l: { name: string }) => l.name === 'Gruen').activeT).toBe(false);
+    await as(t, player).put(`/v1/loadouts/${green.id}/side`, { side: 'CT', active: true }).expect(200);
+    expect(await patternOf('CT')).toBe(222);
   });
 });

@@ -155,6 +155,12 @@ export class LoadoutsController {
     return this.loadouts.importJson(auth.userId, body.data);
   }
 
+  @Put(':id/side')
+  @Authenticated()
+  side(@CurrentAuth() auth: AuthContext, @Param('id', { schema: idParam }) id: string, @Body({ schema: z.object({ side: z.enum(['T', 'CT']), active: z.boolean() }) }) body: { side: 'T' | 'CT'; active: boolean }) {
+    return this.loadouts.setSide(auth.userId, id, body.side, body.active);
+  }
+
   @Patch(':id')
   @Authenticated()
   update(@CurrentAuth() auth: AuthContext, @Param('id', { schema: idParam }) id: string, @Body({ schema: updateLoadoutSchema }) body: z.infer<typeof updateLoadoutSchema>) {

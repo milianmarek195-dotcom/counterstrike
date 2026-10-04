@@ -41,6 +41,8 @@ const view = (l: LoadoutRow, owner?: { displayName: string }) => ({
   shareCode: l.shareCode,
   visibility: l.visibility,
   isActive: l.isActive,
+  activeT: l.activeT,
+  activeCt: l.activeCt,
   createdAt: l.createdAt,
   updatedAt: l.updatedAt,
   ...(owner ? { owner: owner.displayName } : {}),
@@ -150,6 +152,17 @@ export class LoadoutsService {
     await this.prisma.$transaction([
       this.prisma.loadout.updateMany({ where: { ownerId: userId, isActive: true }, data: { isActive: false } }),
       this.prisma.loadout.update({ where: { id }, data: { isActive: true } }),
+    ]);
+    return view(await this.load(userId, id));
+  }
+
+  /** Makes a loadout the one that applies on a single side (T or CT), on top of the default active loadout; or removes that. */
+  async setSide(userId: string, id: string, side: 'T' | 'CT', active: boolean) {
+    await this.load(userId, id);
+    const field = side === 'T' ? 'activeT' : 'activeCt';
+    await this.prisma.$transaction([
+      ...(active ? [this.prisma.loadout.updateMany({ where: { ownerId: userId, [field]: true }, data: { [field]: false } })] : []),
+      this.prisma.loadout.update({ where: { id }, data: { [field]: active } }),
     ]);
     return view(await this.load(userId, id));
   }
@@ -273,11 +286,13 @@ export class LoadoutsService {
   async resolveForServer(steamId: string) {
     const user = await this.prisma.user.findUnique({ where: { steamId }, select: { id: true } });
     if (!user) return { level: 0, items: [], skipped: [] };
-    const loadout = await this.prisma.loadout.findFirst({ where: { ownerId: user.id, isActive: true }, include: loadoutInclude });
+    // each side uses the loadout made active for it, otherwise the default active loadout
+    const candidates = await this.prisma.loadout.findMany({ where: { ownerId: user.id, OR: [{ isActive: true }, { activeT: true }, { activeCt: true }] }, include: loadoutInclude });
     const permission = await this.permissions.effectiveFor(user.id);
-    if (!loadout) return { level: permission.level, items: [], skipped: [] };
+    if (candidates.length === 0) return { level: permission.level, items: [], skipped: [] };
+    const loadoutFor = (side: 'T' | 'CT') => candidates.find((c) => (side === 'T' ? c.activeT : c.activeCt)) ?? candidates.find((c) => c.isActive);
 
-    const infos = await this.skins.infoFor(loadout.items.flatMap((i) => (i.inventoryItem.skinId ? [i.inventoryItem.skinId] : [])));
+    const infos = await this.skins.infoFor(candidates.flatMap((c) => c.items.flatMap((i) => (i.inventoryItem.skinId ? [i.inventoryItem.skinId] : []))));
     const thresholds = await this.settings.get('skin.thresholds');
 
     // Resolve each side on its own: the same weapon may carry different skins for T and CT. An item equipped for BOTH
@@ -285,6 +300,8 @@ export class LoadoutsService {
     const items: Array<Record<string, unknown>> = [];
     const skipped: Array<{ team: string; weaponDefIndex: number; reasons: string[] }> = [];
     for (const side of ['T', 'CT'] as const) {
+      const loadout = loadoutFor(side);
+      if (!loadout) continue;
       const chosen = new Map<number, (typeof loadout.items)[number]>();
       for (const li of loadout.items) if (li.team === 'BOTH') chosen.set(li.weaponDefIndex, li);
       for (const li of loadout.items) if (li.team === side) chosen.set(li.weaponDefIndex, li);

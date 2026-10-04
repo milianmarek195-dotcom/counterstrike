@@ -18,7 +18,7 @@ interface Item { id: string; slot: string; weaponDefIndex: number; skin: ItemSki
   stickers?: Array<{ slotIndex: number; wear: number; rotation: number | null; scale: number | null; sticker: Sticker }>;
   keychain?: Charm | null; keychainSeed?: number; keychainOffsetX?: number; keychainOffsetY?: number; keychainOffsetZ?: number }
 interface LoadoutEntry { weaponDefIndex: number; team: Team; item: Item }
-interface Loadout { id: string; name: string; shareCode: string | null; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; isActive: boolean; items: LoadoutEntry[] }
+interface Loadout { id: string; name: string; shareCode: string | null; visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; isActive: boolean; activeT?: boolean; activeCt?: boolean; items: LoadoutEntry[] }
 interface Access { level: number; floatEditing: boolean; stickerCrafts: boolean; customLoadouts: boolean; expiresAt: string | null }
 interface PriceEntry { wear: string; variant: string; priceUsd: number; requiredLevel: number }
 interface PlacedSticker { sticker: Sticker; wear: number; rotation: number; scale: number }
@@ -529,11 +529,13 @@ function LoadoutBar({ loadouts, limit, target, setTarget, act, loading }: { load
       <div className="grid gap-3 md:grid-cols-3">
         {loadouts.map((l) => (
           <button key={l.id} onClick={() => setTarget(l.id)} aria-pressed={target === l.id} className={cn('rounded-md border bg-card p-3 text-left transition hover:bg-card-hover', target === l.id && 'ring-2 ring-primary')}>
-            <div className="flex items-center justify-between"><b className="font-display text-lg uppercase tracking-wide">{l.name}</b>{l.isActive && <span className="flex items-center gap-1 text-xs text-success"><Check size={12} />aktiv im Spiel</span>}</div>
+            <div className="flex items-center justify-between"><b className="font-display text-lg uppercase tracking-wide">{l.name}</b><span className="flex flex-wrap items-center justify-end gap-1 text-xs text-success">{l.isActive && <span className="flex items-center gap-1"><Check size={12} />aktiv</span>}{l.activeT && <span className="rounded bg-[#e0a526] px-1.5 font-bold text-black">T</span>}{l.activeCt && <span className="rounded bg-[#5b8def] px-1.5 font-bold text-black">CT</span>}</span></div>
             <div className="mt-0.5 text-xs text-muted">{l.items.length} Einträge{l.shareCode ? ` · ${l.shareCode}` : ''}</div>
             {target === l.id && (
               <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                 {!l.isActive && <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void act.run(() => api(`/loadouts/${l.id}/activate`, { method: 'POST' }))}>Aktivieren</Button>}
+                <Button variant={l.activeT ? 'primary' : 'secondary'} className="px-2 py-1 text-xs" title="Dieses Loadout gilt auf der T-Seite (überschreibt das aktive)" onClick={() => void act.run(() => api(`/loadouts/${l.id}/side`, { method: 'PUT', body: { side: 'T', active: !l.activeT } }))}>{l.activeT ? 'T ✓' : 'Für T'}</Button>
+                <Button variant={l.activeCt ? 'primary' : 'secondary'} className="px-2 py-1 text-xs" title="Dieses Loadout gilt auf der CT-Seite (überschreibt das aktive)" onClick={() => void act.run(() => api(`/loadouts/${l.id}/side`, { method: 'PUT', body: { side: 'CT', active: !l.activeCt } }))}>{l.activeCt ? 'CT ✓' : 'Für CT'}</Button>
                 <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void act.run(() => api(`/loadouts/${l.id}/share-code`, { method: 'POST' }))}><Share2 size={12} />Code</Button>
                 <Button variant="secondary" className="px-2 py-1 text-xs" title="Nur das aktive Loadout erscheint auf deinem Profil" onClick={() => void act.run(() => api(`/loadouts/${l.id}`, { method: 'PATCH', body: { visibility: l.visibility === 'PRIVATE' ? 'PUBLIC' : 'PRIVATE' } }))}>{l.visibility === 'PRIVATE' ? 'Privat' : 'Öffentlich'}</Button>
                 <Button variant="ghost" className="px-2 py-1 text-xs" aria-label="Loadout löschen" onClick={() => { if (confirm(`Loadout „${l.name}“ löschen?`)) void act.run(() => api(`/loadouts/${l.id}`, { method: 'DELETE' })); }}><Trash2 size={12} /></Button>
